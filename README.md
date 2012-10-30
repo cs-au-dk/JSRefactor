@@ -1,4 +1,5 @@
-==== JSRefactor ====
+JSRefactor
+==========
 
 Experimental refactoring tools for JavaScript. This project explores the possibility of using points-to information as the foundation for refactoring logic.
 
