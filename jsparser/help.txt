@@ -1,0 +1,7 @@
+
+To build, run the "sablecc" target from build.xml and refresh the "generated" folder.
+Then Eclipse should be able to build the project.
+
+If changes are made to the injections (in injections folder) run "inject" again to update the AST classes, 
+or simply run "sablecc" again.
+

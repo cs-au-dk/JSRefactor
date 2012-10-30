@@ -1,0 +1,454 @@
+<html>
+<head>
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+            border: 0;
+        }
+
+        .card, textarea {
+            text-align: center;
+            font: 20px/30px serif;
+            color: #000;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        .card {
+            margin: -90px -170px -90px -170px;
+            position: absolute;
+            top: -20%;
+            left: -20%;
+            height: 176px;
+            width: 316px;
+            border: 2px solid #ccc;
+            background: #eed;
+        }
+
+        body {
+            background: #244;
+            min-width: 760px;
+            overflow: hidden;
+            padding: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100%;
+        }
+
+        .menu {
+            width: 50px;
+            text-align: center;
+            padding: 10px;
+            margin: 10px;
+            border: 2px solid #355;
+            font: 26px serif;
+            color: #ffe;
+            background: #466;
+        }
+
+        #Taker, #Pixer, #Notice, #Me {
+            cursor: pointer;
+        }
+
+        #Pixerer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            font: 16px serif;
+            color: #eed;
+            padding-top: 5%;
+            display: none;
+            z-index: 9;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+    </style>
+    <title>Notecards</title>
+</head>
+<body>
+<div style="margin-left:60px;">
+    <div class="menu" id="Taker">(+)</div>
+    <div class="menu" id="Pixer">(#)</div>
+    <div class="menu" id="Notice">(?)</div>
+    <div class="menu" id="Me">('•')</div>
+</div>
+<div id="Pixerer">This image can be saved.<br>double click to close.<br><br>
+
+</div>
+</body>
+<script>
+/*
+ written by Hahentiy, haha3012@gmail.com.
+ don't forget about me if use (part of)? it.
+ */
+var $ = function(a) {
+    return document.getElementById(a) || false
+}
+        ,emit = function(f, c, a) {
+    a = Array.prototype.slice.call(arguments, 2);
+    if (typeof f == 'function') setTimeout(function() {
+        f.apply(c || null, a)
+    }, 1)
+}
+        ,rnd = function(a) {
+    return a ? Math.round(Math.random() * a) : Math.random()
+}
+        ,card = function() {
+    var ff = function() {
+        var tms = {}
+        return function(i) {
+            i = i.id + ''
+            if (!tms[i]) tms[i] = function() {
+                var q = []
+                        ,f = function() {
+                    if (q[0] && !q[0]())q.shift();
+                    if (q.length)setTimeout(f, 20)
+                }
+                return function(af) {
+                    var A = arguments, pf
+                    if (typeof af == 'function') {
+                        if (A.length > 1) {
+                            pf = function(me) {
+                                me = arguments.callee;
+                                return me.f.apply(me.c, me.a)
+                            }
+                            pf.f = af;
+                            pf.a = Array.prototype.slice.call(A, 1);
+                            pf.c = A[A.length - 1]
+                            af = pf
+                        }
+                        q.push(af)
+                        if (q.length == 1) setTimeout(f)
+                    }
+                    if (af === 0) q.length = 0
+                    return A.callee
+                }
+            }()
+            return tms[i]
+        }
+    }()
+            ,moveN = function(a, x, y, z, e, n) {
+        e = e || '%'
+        var f = function() {
+            var s = []
+                    ,k = function(n) {
+                var m = [],i = 0;
+                while (i++ < n) m.push(Math.sqrt(i / n * (2 - i / n)));
+                return m
+            }(n || 15)
+                    ,x0 = parseFloat(a.style.left) || 0
+                    ,y0 = parseFloat(a.style.top) || 0
+                    ,z0 = parseInt(a.style.rotate) || 0
+            if (x == null) x = 0; else x = x - x0
+            if (y == null) y = 0; else y = y - y0
+            if (z == null) z = 0; else z = z - z0
+            while (k.length) {
+                s.push({ x: ( k[0] * x + x0 ).toFixed(2), y: ( k[0] * y + y0 ).toFixed(2), z: (k[0] * z + z0) % 360 })
+                k.shift()
+            }
+            f = function(x, y, z) {
+                x = s[0].x;
+                y = s[0].y;
+                z = s[0].z
+                a.style.left = x + e;
+                a.style.top = y + e;
+                a.style.rotate = z
+                a.style.WebkitTransform = 'rotate(' + z + 'deg)'
+                a.style.MozTransform = 'rotate(' + z + 'deg)'
+                a.style.OTransform = 'rotate(' + z + 'deg)'
+                a.style.transform = 'rotate(' + z + 'deg);'
+                s.shift();
+                return s.length
+            }
+            return true
+        }
+                ,s
+        return function() {
+            return f()
+        }
+    }
+            ,str = function(s) {
+        return s
+                .split('  ').join('&nbsp; ').split('  ').join('&nbsp; ')
+                .split('<').join('&lt;')
+                .split('>').join('&gt;')
+                .replace(/http:\/\/[^\s]+/g, "<a rel='nofollow' href='$&'>$&</a>")
+                .replace(/[\w.]+\@(\w+\.)+\w+/g, "<a href='mailto:$&'>$&</a>")
+                .split("\n").join('<br>')
+    }
+            ,picked
+            ,pick = function() {
+        if (picked != this || !this.tagName || !picked.tagName) {
+            if (picked && picked.tagName) ff(picked)(moveN(picked, rnd(60) + 20, rnd(50) + 30, rnd(160) - 80))
+            if (this && this.tagName) {
+                body.appendChild(this)
+                ff(this)(moveN(this, 50, 30, 360))
+            }
+            picked = this
+            emit(_.onpick, picked)
+        }
+        return false
+    }
+            ,drop = function() {
+        if (this && this.tagName)
+            ff(this)(0)(function(o) {
+                o.innerHTML = '<strike>' + o.innerHTML + '</strike>'
+            }, this)(moveN(this, 50, 150, 360))(function(o) {
+                o.parentNode.removeChild(o)
+            }, this)
+        if (picked == this) picked = null
+        emit(_.ondrop, this)
+    }
+            ,body = document.getElementsByTagName('body')[0]
+            ,tx = document.createElement('textarea')
+            ,_ = {
+        take:function(a, b, c) {
+            c = typeof(c = c || b || a) == 'function' ? c : null
+            b = b == c ? null : b
+            var o = a && a.tagName ? a : $(a) || document.createElement('div')
+            o.className = 'card';
+            body.appendChild(o)
+            o.onclick = pick
+            o.ondblclick = drop
+            if (o != a)o.id = a
+            pick.call(o)
+            if (!b) {
+                tx.value = ''
+                o.innerHTML = ''
+                tx.onblur = function() {
+                    var v = (tx.value || '').replace(/\s+$/, '')
+                    o.innerHTML = str(v)
+                    o.alt = v
+                    emit(c, o, v)
+                }
+                o.appendChild(tx)
+                tx.focus()
+            } else {
+                o.innerHTML = str(b)
+                o.alt = b
+            }
+            return o
+        }
+        ,drop:function(o, f) {
+            o = o && o.tagName ? o : $(o);
+            drop.call(o);
+            emit(f, o);
+            return o
+        }
+        ,pix:function() {
+            var c = document.createElement('canvas'),d,f
+            if (c.getContext)d = c.getContext('2d'); else return function() {
+            }
+            c.setAttribute('width', '320');
+            c.setAttribute('height', '180')
+            d.fillStyle = '#eed';
+            d.strokeStyle = '#ddc';
+            d.lineWidth = 2
+            d.fillRect(0, 0, 320, 180);
+            d.strokeRect(1, 1, 318, 178)
+            d.lineWidth = 3
+            d.beginPath();
+            d.moveTo(243, 13)
+            d.bezierCurveTo(183, 18, 183, 3, 143, 3);
+            d.stroke()
+            d.bezierCurveTo(113, 3, 103, 23, 53, 23);
+            d.stroke()
+            d.bezierCurveTo(33, 23, 10, 10, 3, 3);
+            d.stroke()
+            d.bezierCurveTo(10, 10, 33, 23, 53, 23);
+            d.stroke()
+            d.bezierCurveTo(100, 23, 140, -10, 160, 23);
+            d.stroke()
+            d.closePath()
+            d.beginPath();
+            d.moveTo(23, 163)
+            d.bezierCurveTo(-10, 120, 23, 120, 23, 60);
+            d.stroke()
+            d.bezierCurveTo(23, 30, 10, 10, 3, 3);
+            d.stroke()
+            d.bezierCurveTo(20, 20, 30, 70, 10, 80);
+            d.stroke()
+            d.closePath()
+            f = d.getImageData(0, 0, 320, 180)
+            delete d,c;
+
+            return function(id) {
+                var c = document.createElement('canvas'), d = c.getContext('2d')
+                        ,q = 0, i, l, ss, sa = []
+                        ,o = id ? (id.tagName ? id : $(id)) : picked
+                        ,s = o && o.alt ? o.alt.split("\n") : []
+                if (!s.length) return false;
+                c.setAttribute('width', '340')
+                c.setAttribute('height', '180')
+                d.font = '20px/30px serif'
+                d.textAlign = 'center'
+                d.putImageData(f, 0, 0)
+                for (i in s) {
+                    l = s[i].split(' ');
+                    do{
+                        ss = ''
+                        while (l.length && d.measureText(ss + ' ' + l[0]).width <= 316)ss += ' ' + l.shift();
+                        sa.push(ss)
+                        q += 1
+                    } while (l.length)
+                }
+                ss = Math.round((180 - q * 30) / 2) + 15
+                for (i = 0,l = sa.length; i < l; i += 1) d.fillText(sa[i], 158, ss + i * 30)
+                d = new Image();
+                d.src = c.toDataURL()
+                emit(_.onpix, d, o)
+                return d
+            }
+        }()
+    }
+    return _
+}()
+        ,noter = function(istore, iload, ierase) {
+    var notes = {}
+            ,list = []
+            ,makeid = function() {
+        if (list.length == 127) return false
+        var id, ids = ' ' + list.join(' ') + ' '
+        do{
+            id = '0x' + rnd(65535).toString(16)
+        } while (ids.indexOf(id) > 0)
+        return id
+    }
+            ,keep = function(f) {
+        istore('list', list.join(';'), f)
+    }
+            ,avail = null
+    return {
+        write:function(s, f) {
+            var id = makeid()
+            if (id) {
+                list.push(id)
+                notes[id] = s
+                istore(id, s, f)
+                keep()
+            } else emit(f)
+        }
+        ,erase:function(id, f) {
+            if (notes[id]) {
+                list.splice(list.indexOf(id), 1)
+                delete notes[id]
+                ierase(id, f)
+                keep()
+            } else {
+                emit(f)
+            }
+        }
+        ,load:function(ft, fn) {
+            istore('test', 'test', function(d) {
+                if (d == 'test') {
+                    ierase('test')
+                    avail = true
+                    emit(ft, null, true)
+                    iload('list', function(s) {
+                        list = s ? s.split(';') : []
+                        for (var i in list) iload(list[i], function(d, i) {
+                            if (i) {
+                                notes[i] = d
+                                emit(fn, null, i, d)
+                            } else delete list.splice(i, 1)
+                        })
+                    })
+                } else {
+                    avail = false
+                    emit(ft, null, false)
+                }
+            })
+        }
+        ,get:function(id) {
+            return notes[id] || false
+        }
+    }
+}(
+        function(a, b, c) {
+            try {
+                localStorage.setItem('Noter:' + a, b)
+            } catch(e) {
+                emit(c);
+                return
+            }
+            ;
+            emit(c, null, a, b)
+        }
+        , function(a, c) {
+    try {
+        var r = localStorage.getItem('Noter:' + a)
+    } catch(e) {
+        emit(c);
+        return
+    }
+    emit(c, null, r, a)
+}
+        , function(a, c) {
+    try {
+        localStorage.removeItem('Noter:' + a, b)
+    } catch(e) {
+        emit(c);
+        return
+    }
+    ;
+    emit(c, null, true)
+}
+        )
+
+
+$('Notice').onclick = function() {
+    card.take('EraseCard', '(+) - take new card\n(#) - rasterize picked card\nDouble click on card to drop it.')
+}
+$('Me').onclick = function() {
+    card.take('MeCard', 'Hahentiy\ne-mail: haha3012@gmail.com\n\nSorry for my english.')
+}
+var pxrr = $('Pixerer')
+$('Pixer').onclick = function() {
+    var c = card.pix()
+    if (c) {
+        pxrr.style.display = 'block'
+        pxrr.appendChild(c);
+        c.ondblclick = function() {
+            pxrr.removeChild(this);
+            pxrr.style.display = 'none'
+        }
+    }
+}
+noter.load(
+        function(run) {
+            if (run) {
+                $('Taker').onclick = function() {
+                    var c = card.take(rnd(100), function(s) {
+                        if (!s) card.drop(c);
+                        else {
+                            noter.write(s, function(id, s) {
+                                if (id) {
+                                    c.id = id
+                                } else {
+                                    card.take('NoNote', "\nNotes are unavailable")
+                                    card.drop(c)
+                                }
+                            })
+                        }
+                    })
+                }
+                card.ondrop = function() {
+                    noter.erase(this.id)
+                }
+            } else {
+                $('Taker').ouclick = function() {
+                    card.take('Error', 'Error\nYou cannot note here, sorry.')
+                }
+                $('Taker').style.color = '#998'
+                $('Pixer').style.color = '#998'
+            }
+        }
+        , card.take
+        )
+</script>
+</html>

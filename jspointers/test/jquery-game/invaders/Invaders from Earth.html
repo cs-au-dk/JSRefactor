@@ -1,0 +1,48 @@
+
+<html> 
+  <head> 
+    <title>Invaders from Earth</title> 
+        <link type="text/css" rel="stylesheet" href="style.css" /> 
+    <script type="text/javascript" src="jquery-1.2.6.min.js"></script> 
+    <script type="text/javascript" src="jquery.gamequery-0.3.0.js"></script> 
+        <script type="text/javascript" src="game.js"></script> 
+    <script type="text/javascript">     
+      $(function(){
+        game.init();
+        $(document).keyup(function(evt){ game.keyUpHandler(evt); });
+        $(document).keydown(function(evt){ game.keyDownHandler(evt); });
+        $('#welcome span').click(function(){ game.start(); });
+      });
+      
+    </script> 
+  </head> 
+  <body> 
+    
+    <div id="playground"> 
+      <div id="welcome"> 
+        Press ENTER to Start the Game!
+      </div> 
+      <div id="pause"> 
+        <br /> ENTER to continue
+      </div> 
+    </div> 
+    <div id="console"> 
+      <div id="stat"> 
+            Score: <span id="fkill">0</span><br /> 
+      Shield Level: <span id="shieldDisplay">0</span><br /> 
+      Fighter ID: <span id="fid">0</span><br /> 
+      Number of Fighters: <span id="amtFighters">0</span><br /> 
+      Shots Fired: <span id="shots">0</span><br /> 
+      Live Shots: <span id="liveShots">0</span><br /> 
+      Total Fighters: <span id="totalFighters">0</span><br /> 
+            Visible Fighters: <span id="visibleFighters">0</span><br /> 
+    </div> 
+        <div id="desc"> 
+          <h2>Invaders from Earth</h2> 
+          The object of this game is to survive and shoot down fighters. Your shield can be hit five times before exposing you. If you get hit, the game will restart.
+            Your fire power is limited to 5 shots and there are 70 fighters to destroy.  
+        </div> 
+        </div> 
+ 
+  </body> 
+</html>

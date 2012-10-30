@@ -1,0 +1,1 @@
+Uses the DOM partly in its object model. This causes some spurious warnings when renaming things.

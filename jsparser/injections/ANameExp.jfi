@@ -1,0 +1,8 @@
+interface ILeftHandSideNode
+
+code
+	@Override
+	public boolean isAssignable() {
+		return true;
+	}
+endcode

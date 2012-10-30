@@ -1,0 +1,107 @@
+<project name="jsparser">
+	<property name="sablecc.jar" value="lib/sablecc-js.jar"/>
+	<property name="grammar" value="grammar/javascript.sablecc"/>
+	<property name="injector.jar" value="lib/SableCCInjector.jar"/>
+	<property name="sableout.dir" value="sableout"/>
+	<property name="package.dir" value="dk/brics/jsparser"/>
+	<property name="node" value="node"/>
+	<property name="analysis" value="analysis"/>
+	<property name="parser" value="parser"/>
+	<property name="lexer" value="lexer"/>
+	<property name="injections.dir" value="injections"/>
+	<property name="generated.dir" value="generated"/>
+	
+	<condition property="uptodate">
+		<uptodate srcfile="${grammar}" targetfile="generated/dk/brics/jsparser/parser/Parser.java"/>
+	</condition>
+	
+	<target name="sablecc-update" unless="uptodate">
+		<antcall target="sablecc"/>
+	</target>
+	
+	<target name="sablecc" depends="clear">
+		<java jar="${sablecc.jar}" fork="true">
+			<arg value="-D"/>
+			<arg value="${sableout.dir}"/>
+			<arg value="${grammar}"/>
+			<arg value="--number-alts"/>
+			<arg value="--node-interface"/>
+			<jvmarg value="-Xmx1000m"/>
+		</java>
+		<antcall target="move"/>
+		<antcall target="inject"/>
+	</target>
+	
+	<target name="clear">
+		<delete dir="${sableout.dir}/${package.dir}/${node}"/>
+		<mkdir dir="${sableout.dir}/${package.dir}/${node}"/>
+		<delete dir="${sableout.dir}/${package.dir}/${analysis}"/>
+		<mkdir dir="${sableout.dir}/${package.dir}/${analysis}"/>
+		<delete dir="${sableout.dir}/${package.dir}/${parser}"/>
+		<mkdir dir="${sableout.dir}/${package.dir}/${parser}"/>
+		<delete dir="${sableout.dir}/${package.dir}/${lexer}"/>
+		<mkdir dir="${sableout.dir}/${package.dir}/${lexer}"/>
+		
+		<delete dir="${generated.dir}/${package.dir}/${node}"/>
+		<mkdir dir="${generated.dir}/${package.dir}/${node}"/>
+		<delete dir="${generated.dir}/${package.dir}/${analysis}"/>
+		<delete dir="${generated.dir}/${package.dir}/${parser}"/>
+		<delete dir="${generated.dir}/${package.dir}/${lexer}"/>
+	</target>
+	
+	<target name="move">
+		<move file="${sableout.dir}/${package.dir}/${analysis}" tofile="${generated.dir}/${package.dir}/${analysis}" />
+		<move file="${sableout.dir}/${package.dir}/${parser}" tofile="${generated.dir}/${package.dir}/${parser}" />
+		<move file="${sableout.dir}/${package.dir}/${lexer}" tofile="${generated.dir}/${package.dir}/${lexer}" />
+	</target>
+	
+	<target name="inject">
+		<java classname="asf.sableccinjector.Injector" fork="true">
+			<classpath path="${injector.jar}" />
+			<arg value="--ast-dir=${sableout.dir}/${package.dir}/${node}" />
+			<arg value="--injections-dir=${injections.dir}"/>
+			<arg value="--output-dir=${generated.dir}/${package.dir}/${node}" />
+		</java>
+	</target>
+	
+	<target name="compile">
+		<mkdir dir="bin"/>
+		<javac destdir="bin">
+			<src path="src"/>
+			<src path="generated"/>
+			<src path="test"/>
+			<classpath>
+				<pathelement path="../jtidy-js/target/bin"/>
+				<pathelement path="../jsutil/bin"/>
+				<pathelement path="lib/jdom-1.1.1.jar"/>
+				<pathelement path="lib/jdom-contrib-1.1.1.jar"/>
+				<fileset dir="../jsutil/lib">
+					<include name="**/*.jar"/>
+				</fileset>
+			</classpath>
+		</javac>
+		<copy todir="bin">
+			<fileset dir="src">
+				<include name="**/*"/>
+				<exclude name="**/*.java"/>
+				<exclude name="**/.*"/>
+			</fileset>
+			<fileset dir="generated">
+				<include name="**/*"/>
+				<exclude name="**/*.java"/>
+				<exclude name="**/.*"/>
+			</fileset>
+			<fileset dir="test">
+				<include name="**/*"/>
+				<exclude name="**/*.java"/>
+				<exclude name="**/.*"/>
+			</fileset>
+		</copy>
+	</target>
+	
+	<target name="all" depends="clear,sablecc,compile">
+	</target>
+	<target name="all-update" depends="sablecc-update,compile">
+	</target>
+	
+</project>

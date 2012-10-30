@@ -1,0 +1,589 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=9" />
+    <meta name="t_omni_demopage" content="1" />
+   <title>Flying Images</title>
+    <!--
+        Thanks for checking out this site. The purpose of these demos is to convey a concept and not intended to be used as a best
+        practice for web development. It�s not the cleanest code, and in some places we took shortcuts to get more demos to you. Enjoy!
+        Special thanks to Will Jessup, Gerard Ferrandez, and other web developers who have been experimenting with 3d spaces using JavaScript.
+        Their prototypes gave us the idea for this demo.
+    -->
+    <style type="text/css">
+        html
+        {
+            overflow: hidden;
+            background-image: url('Background.jpg');
+            background-repeat: repeat;
+        }
+
+        body
+        {
+            margin: 0px;
+            padding: 0px;
+            font-family: Segoe UI, Verdana, Arial, Sans-Serif;
+            font-size: 11pt;
+            color: #666;
+        }
+
+        a:link, a:visited
+        {
+            color: #00c7ff;
+            text-decoration: none;
+        }
+
+        a:link:hover, a:visited:hover
+        {
+            color: #00c7ff;
+            text-decoration: underline;
+        }
+
+        #informationpanel
+        {
+            position: absolute;
+            text-align: center;
+            top: 18px;
+            left: 10px;
+            width: 60px;
+            color: Gray;
+        }
+
+        .informationvalue
+        {
+            font-size: 24pt;
+            margin-bottom: -4px;
+        }
+
+        .informationlabel
+        {
+            font-size: 9pt;
+            margin-bottom: 10px;
+        }
+
+        #returnbutton
+        {
+            position: absolute;
+            display: block;
+            top: 0px;
+            right: 6px;
+            width: 210px;
+            height: 29px;
+            background-image: url(../../includes/image/ReturnButton.png);
+            background-position: left top;
+            text-indent: -9999px;
+        }
+
+        .controlpanelsection1
+        {
+            position: absolute;
+            top: 32px;
+            right: 105px;
+            width: 100px;
+        }
+
+        .controlpanelsection2
+        {
+            position: absolute;
+            top: 32px;
+            right: 0px;
+            width: 100px;
+        }
+
+        .notes
+        {
+            position: absolute;
+        	top: 132px;
+        	right:0px;
+        	width: 205px;
+        	font-size: 9pt;
+        	font-style: italic;
+        }
+
+        .controllabel
+        {
+            font-size: 9pt;
+            font-weight: bold;
+        }
+
+        .control
+        {
+            font-size: 9pt;
+        }
+
+        #board
+        {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        #board img
+        {
+            position: absolute;
+        }
+
+        #copyright
+        {
+            color: Gray;
+            font-size: 8pt;
+            position: absolute;
+            bottom: 3px;
+            right: 6px;
+            width: 100%;
+            text-align: right;
+        }
+    </style>
+    <script type="text/javascript">
+        var intervalID;
+
+        var boardWidth;
+        var boardHeight;
+        var boardLeft;
+        var boardTop;
+
+        var board;
+        var fps;
+        var countimages;
+        var currentSecond = 0;
+        var currentFPS = 0;
+        var count = 6;
+        var images = [];
+        var mouseX = 0;
+        var mouseY = 0;
+        var zoomed = false;
+        var mouseOverControls = false;
+        var zoomingOut = false;
+        var timeLastAnimation;
+        var insidecontrolpanel;
+        var controlpanelzoomed = false;
+        var useBrowserLogos = true;
+
+        var IMAGE;
+        var DEFAULTIMAGE = "IEMedium.png";
+        var MIXIMAGE = "MixPhoto.png";
+        var LARGEIMAGE = "LargeIELogo.png";
+        var LOGO1 = "Logo1.png";
+        var LOGO2 = "Logo2.png";
+        var LOGO3 = "Logo3.png";
+        var LOGO4 = "Logo4.png";
+        var IEIMAGE = "IELogo.png";
+        var PROXIMITY = 90;
+        var PREVIOUSPROXIMITY = 90;
+        var NORMALPROXIMITY = 90;
+        var MINPROXIMITY = 25;
+        var MAXPROXIMITY = 160;
+        var TARGETPROXIMITY = 25;
+        var xDAMPING = 7000;
+        var yDAMPING = 10;
+        var MINCOUNT = 2;
+        var MAXCOUNT = 16;
+        var FL = 200;
+        var RATIO = 3;
+        var TIMEOUT = 15;
+
+        var a = 0;
+        var y = 0;
+
+        window.onload = Setup;
+
+
+
+        // Setup the Board
+
+        function Setup() {
+
+            IMAGE = DEFAULTIMAGE;
+            board = document.getElementById('board');
+            fps = document.getElementById('fps');
+            countimages = document.getElementById('countimages');
+            CreateBoard();
+
+            GetBounds();
+            y = mouseY = boardHeight / 2;
+
+            if (window.addEventListener) {
+                window.addEventListener("resize", GetBounds, false);
+                document.addEventListener("keypress", OnKeyPress, false);
+                window.addEventListener("mousemove", OnMouseMove, false);
+            }
+            else if (window.attachEvent) {
+                window.attachEvent("onresize", GetBounds);
+                document.attachEvent("onkeypress", OnKeyPress);
+                window.attachEvent("onmousemove", OnMouseMove);
+            }
+
+            StartAnimation();
+        }
+
+        function StartAnimation()
+        {
+            intervalID = setInterval(Draw, 15);
+        }
+
+        function GetBounds() {
+            boardWidth = board.offsetWidth / 2;
+            boardHeight = board.offsetHeight / 2;
+
+            boardTop = board.offsetTop;
+            boardLeft = board.offsetLeft;
+            for (var p = board.offsetParent; p != null; p = p.offsetParent) {
+                boardTop += p.offsetTop;
+                boardLeft += p.offsetLeft;
+            }
+        }
+
+
+
+        // Create Board
+
+        function CreateBoard() {
+
+            images = [];
+            board.innerHTML = '';
+
+            var c = 1;
+            var i = count / 2 - .5;
+            for (var x = -i; x <= i; x++)
+            {
+                for (var z = -i; z <= i; z++)
+                {
+                    var img = document.createElement('img');
+                    img.setAttribute("name", "rotatingimage");
+                    img.style.left = '5000px';
+                    img.x3d = x;
+                    img.z3d = z;
+                    if (useBrowserLogos == true)
+                    {
+                        switch (c)
+                        {
+                            case 1:
+                             img.src = IEIMAGE;
+                                c ++;
+                                break;
+                            case 2:
+                                img.src = LOGO2;
+                                c ++;
+                                break;
+                            case 3:
+                                img.src = LOGO1;
+                                c ++;
+                                break;
+                            case 4:
+                                img.src = LOGO4;
+                                c ++;
+                                break;
+                            case 5:
+                                img.src = LOGO3;
+                                c = 1;
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        img.src = IMAGE;
+                    }
+                    board.appendChild(img);
+                    images.push(img);
+                }
+            }
+            countimages.innerHTML = images.length;
+        }
+
+
+
+        // Draw the Images
+
+        function Draw() {
+
+            a += (mouseX - boardWidth) / xDAMPING;
+            y += ((mouseY - boardHeight) - y) / yDAMPING;
+
+            var ca = Math.cos(a);
+            var sa = Math.sin(a);
+
+            var img = null;
+            for (var i = 0; img = images[i]; i++) {
+                var x = img.x3d * (boardWidth / (PROXIMITY / 5));
+                var z = img.z3d * (boardWidth / (PROXIMITY / 5));
+                var X = sa * x + ca * z;
+                var Y = sa * z - ca * x;
+                var W = FL / (FL + Y);
+                var w = Math.round(W * boardWidth / (PROXIMITY / 5));
+
+                img.style.left = Math.round(X * W + boardWidth - w * .5) + 'px';
+                img.style.top = Math.round(y * W + boardHeight - w * .5) + 'px';
+                var width = Math.max(2, w);
+                var height = Math.max(6, w * RATIO);
+                if (width < 5)
+                {
+                    img.style.width = '0px';
+                    img.style.height = '0px';
+                }
+                else
+                {
+                    img.style.width = width + 'px';
+                    img.style.height = height + 'px';
+                }
+                img.style.zIndex = w;
+            }
+
+            var rightNow = new Date().getSeconds();
+            if (rightNow == currentSecond){
+                currentFPS++;
+            }
+            else{
+                currentSecond = rightNow;
+                fps.innerHTML = (currentFPS > 60) ? 60 : currentFPS;
+                currentFPS = 1;
+            }
+        }
+
+
+
+        // Zoom Functions
+
+        function ZoomIn() {
+            TARGETPROXIMITY = MINPROXIMITY;
+            ZoomToTarget();
+        }
+
+        function ZoomOut() {
+            PREVIOUSPROXIMITY = PROXIMITY;
+            TARGETPROXIMITY = MAXPROXIMITY;
+            ZoomToTarget();
+        }
+
+        function ZoomNormal() {
+            TARGETPROXIMITY = NORMALPROXIMITY;
+            if (PROXIMITY < NORMALPROXIMITY){
+                PROXIMITY = PROXIMITY + 1;
+                setTimeout(ZoomNormal, 1);
+            }
+            else if (PROXIMITY > NORMALPROXIMITY){
+                PROXIMITY = PROXIMITY - 1;
+                setTimeout(ZoomNormal, 1);
+            }
+        }
+
+        function ZoomRestore() {
+            TARGETPROXIMITY = PREVIOUSPROXIMITY;
+            if (PROXIMITY+5 < TARGETPROXIMITY){
+                PROXIMITY = PROXIMITY + 5;
+                setTimeout(ZoomRestore, 1);
+            }
+            else if (PROXIMITY-5 > TARGETPROXIMITY){
+                PROXIMITY = PROXIMITY - 5;
+                setTimeout(ZoomRestore, 1);
+            }
+            else
+            {
+                PROXIMITY = TARGETPROXIMITY;
+            }
+        }
+
+        function ZoomToTarget() {
+            if (PROXIMITY < TARGETPROXIMITY){
+                PROXIMITY = PROXIMITY + 1;
+                setTimeout(ZoomToTarget, 1);
+            }
+            else if (PROXIMITY > TARGETPROXIMITY){
+                PROXIMITY = PROXIMITY - 1;
+                setTimeout(ZoomToTarget, 1);
+            }
+        }
+
+        function ZoomInButton() {
+            PREVIOUSPROXIMITY = MINPROXIMITY;
+            ZoomIn();
+        }
+
+        function ZoomNormalButton() {
+            PREVIOUSPROXIMITY = NORMALPROXIMITY;
+            ZoomNormal();
+        }
+
+
+
+        // Mouse Move
+
+        function OnMouseMove(e) {
+             if (typeof e == 'undefined')
+                e = window.event;
+
+            if (e.ctrlKey){
+                return false;
+            }
+
+            if(e.shiftKey){
+                xDAMPING = 1000;
+                yDAMPING = 10;
+            }
+            else{
+                xDAMPING = 7000;
+                yDAMPING = 10;
+            }
+
+            if ((mouseX > (boardWidth * 2) - 200) && (mouseY < 150)){
+                if (controlpanelzoomed == false){
+                    controlpanelzoomed = true;
+                    ZoomOut();
+                }
+            }
+            else{
+                if (controlpanelzoomed == true){
+                    controlpanelzoomed = false;
+                    ZoomRestore();
+                }
+            }
+
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            return false;
+        }
+
+
+
+        // Key Press
+
+        function OnKeyPress(e) {
+            if(!e) e = window.event;
+
+            var key = e.key;
+            var code = e.keyCode || e.charCode;
+
+            if(key == "+" || code==43){
+                ChangeCount(2);
+            }
+            else if (key == "-" || code==45){
+                ChangeCount(-2);
+            }
+            else if (key == "z" || code==122){
+                ZoomIn();
+            }
+            else if (key == "x" || code==120){
+                ZoomNormal();
+            }
+            else if (key == "r" || code==114){
+                ResetScene();
+            }
+        }
+
+
+
+        // Increase Items
+
+        function ChangeCount(n) {
+            var newcount = count + n;
+            if (newcount >= MINCOUNT && newcount <= MAXCOUNT)
+            {
+                count = newcount;
+                CreateBoard();
+
+            }
+        }
+
+        function ResetScene() {
+            count = 6;
+            PROXIMITY = NORMALPROXIMITY;
+            IMAGE = DEFAULTIMAGE;
+            y = mouseY = boardHeight / 2;
+            CreateBoard();
+        }
+
+
+
+        // Change Images
+
+        function UseHighResolutionImage() {
+            useBrowserLogos = false;
+            IMAGE = LARGEIMAGE;
+            CreateBoard();
+        }
+
+        function UseDefaultImages() {
+            useBrowserLogos = false;
+            IMAGE = DEFAULTIMAGE;
+            CreateBoard();
+        }
+
+        function UseBrowserLogos() {
+            useBrowserLogos = true;
+            IMAGE = DEFAULTIMAGE;
+            CreateBoard();
+        }
+
+        function UseMixImage() {
+            useBrowserLogos = false;
+            IMAGE = MIXIMAGE;
+            CreateBoard();
+        }
+
+        function UseMyBrowserLogo() {
+            useBrowserLogos = false;
+            if (navigator.userAgent.toLowerCase().indexOf('chrome') > -1)
+            {
+                IMAGE = LOGO1;
+            }
+            else if (navigator.userAgent.toLowerCase().indexOf('firefox') > -1)
+            {
+                IMAGE = LOGO2;
+            }
+            else if (navigator.appName == "Opera")
+            {
+                IMAGE = LOGO3;
+            }
+            else if (navigator.userAgent.toLowerCase().indexOf('safari') > -1)
+            {
+                IMAGE = LOGO4;
+            }
+            else
+            {
+                IMAGE = DEFAULTIMAGE;
+            }
+
+            CreateBoard();
+        }
+
+
+
+    </script>
+
+</head>
+
+<body>
+    <div id="board">
+    </div>
+    <div class="controlpanelsection1">
+        <div class="controllabel">Image Size</div>
+        <div class="control"><a class="control" onclick="UseDefaultImages();" href="#">Default IE Logo</a></div>
+        <div class="control"><a class="control" onclick="UseHighResolutionImage();" href="#">Large IE Logo</a></div>
+
+        <div class="control"><a class="control" onclick="UseMixImage();" href="#">Mix Photo</a></div>
+        <div class="control"><a class="control" onclick="UseMyBrowserLogo();" href="#">My Browser</a></div>
+        <div class="control"><a class="control" onclick="UseBrowserLogos();" href="#">All Browsers</a></div>
+    </div>
+    <div class="controlpanelsection2">
+        <div class="controllabel">Other</div>
+        <div class="control"><a class="control" onclick="ChangeCount(2);" href="#">Increase</a></div>
+
+        <div class="control"><a class="control" onclick="ChangeCount(-2);" href="#">Decrease</a></div>
+        <div class="control"><a class="control" onclick="ZoomInButton();" href="#">Zoom In</a></div>
+        <div class="control"><a class="control" onclick="ZoomNormalButton();" href="#">Zoom Out</a></div>
+        <div class="control"><a onclick="ResetScene();"href="#">Reset</a></div>
+    </div>
+    <div class="notes">
+        <span>Hold shift key to spin faster.</span>
+
+    </div>
+    <div id="informationpanel">
+        <div id="fps" class="informationvalue"></div>
+        <div id="fpscaption" class="informationlabel">FPS</div>
+        <div id="countimages" class="informationvalue"></div>
+        <div id="Div1" class="informationlabel">Images</div>
+    </div>
+<a onclick="window.location='../../Default.html';" href="#" title="Return to Test Drive Demos" id="returnbutton">Return to Test Drive Demos</a>
+
+    <span id="copyright">� 2010 Microsoft</span>
+</body>
+</html>

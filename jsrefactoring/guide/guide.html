@@ -1,0 +1,38 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<title>JSRefactor plugin</title>
+	</head>
+	<body>
+		<p>
+		This plugin is part of a <b>research prototype</b> developed to experiment with the technique presented in the paper <i>Tool-supported refactoring for JavaScript</i> published at OOPSLA'11. It is <i>not</i> ready for production use.
+		</p>
+		Currently, the integration with Eclipse has some noteworthy limitations:
+		<ul>
+		<li>It does not work on JavaScript embedded in HTML files.</li>
+		<li>It does not refactor multiple files. All your JavaScript code is assumed to be in the same file.</li>
+		<li>The warnings produced by the tool are not always that helpful.</li>
+		</ul>
+		The underlying framework imposes other drawbacks that you should be aware of:
+		<ul>
+		<li>Dead code is ignored. You may be surprised if you try to refactor a half-complete program.</li>
+		<li>And therefore, it does not work well on library code.</li>
+		<li>If your code is very complex, the underlying pointer analysis may take a long time and/or use lots of memory.
+		</ul>
+		To try the plugin, follow these instructions:
+		<ol>
+		<li>Read the limitations above and understand that is not for production use.</li>
+		<li>Add this update site to Eclipse: <span style="font-family: monospace">http://cs.au.dk/~jhckragh/update/</span></li>
+		<li>Install the plugin available from the update site. It may take a long time for Eclipse to resolve its dependencies.</li>
+		<li>Open a JavaScript file in Eclipse's JavaScript editor.</li>
+		<li>These three refactorings should now be available from the menu called "Refactoring":
+			<ul>
+			<li>Rename property (do not confuse with the existing refactoring simply called <i>rename</i>)</li>
+			<li>Encapsulate property</li>
+			<li>Extract module</li>
+			</ul>
+			At the time of writing, the refactorings are not available in the right-click menu, nor do they have shortcuts.
+		</li>
+		</ol>
+	</body>
+</html>

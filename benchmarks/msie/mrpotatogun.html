@@ -1,0 +1,818 @@
+<html>
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=9" />
+    <title>Mr. Potato Gun</title>
+    <!--
+        Thanks for checking out this site. This demo uses animation techniques to move the potato pieces around on the screen. The frames
+        per second are taken into account at runtime and used as resistance for the velocity of the objects. The slower the objects are
+        moving across the screen, the more resistance on the model. Press "s" to shoot and "r" to reload. It's a fun way to demonstrate how
+        the browsers overall performance, from hardware accelerated graphics, to compiled javascript, to hardware accelerated canvas, will
+        enable a new generation of HTML5 applications. The purpose of these demos is to convey a concept and not intended to be used as a
+        best practice for web development. It’s not the cleanest code, and in some places we took shortcuts to get more demos to you. Enjoy!
+    -->
+    <style type="text/css">
+        body
+        {
+            margin: 0px;
+            overflow: hidden;
+            background-color: Silver;
+        }
+
+        #surface
+        {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            min-width: 500px;
+            z-index: 10;
+        }
+
+        #returnbutton
+        {
+            position: absolute;
+            display: block;
+            top: 0px;
+            right: 6px;
+            width: 210px;
+            height: 29px;
+            background-image: url(../../includes/image/ReturnButton.png);
+            background-position: left top;
+            text-indent: -9999px;
+            z-index: 20;
+        }
+
+        .srdescription
+        {
+            position: absolute;
+            left: -10000px;
+            top: auto;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+    </style>
+    <script type="text/javascript" src="includes/fpsometer.js"></script>
+    <script type="text/javascript">
+
+
+        // Global Variables
+        var debug;
+        var canvas;
+        var drawingSurface;
+        var drawInterval;
+        var fpsMeter;
+        var sndWhoosh, sndLand;
+
+        // Key Constants
+        var KEY_R = 82;
+        var KEY_S = 83;
+        var KEY_T = 84;
+        var KEY_ENTER = 13;
+
+
+        /* Setup -------------------------------------------------------------------------------- */
+
+        function Setup() {
+
+            debug = document.getElementById('debug');
+            canvas = document.getElementById('surface');
+
+            fpsMeter = new FpsMeter();
+            labelBrowserValue = fpsMeter.browserName + " " + fpsMeter.browserVersion;
+
+            if (canvas.getContext) {
+                drawingSurface = canvas.getContext('2d');
+                ResizeWindow();
+                LoadImages();
+                GeneratePiecesToShoot();
+            }
+            else {
+                // We should have fallback support here for browsers that don't support canvas.
+            }
+
+            window.addEventListener("resize", ResizeWindow, false);
+            window.addEventListener("mousemove", OnMouseMove, false);
+            window.addEventListener("mousedown", OnMouseDown, false);
+            window.addEventListener("keydown", OnKeyDown, false);
+            window.addEventListener("keyup", OnKeyUp, false);
+
+            sndWhoosh = document.getElementById("sndWhoosh");
+            sndLand = document.getElementById("sndLand");
+        }
+        window.onload = Setup;
+
+
+
+        /* Keyboard Events ---------------------------------------------------------------------- */
+
+        function OnKeyDown(e) {
+            var key;
+
+            // Get key code
+            if (e.keyCode) {
+                key = e.keyCode;
+            } else if (document.all) {
+                key = event.keyCode;
+            } else {
+                key = ev.charCode;
+            }
+
+            // Handle key
+            switch (key) {
+
+                case KEY_S:
+                    BeginDescent();
+                    break;
+                case KEY_T:
+                    EnableTurboMode();
+                    break;
+                case KEY_R:
+                    ReloadPotatoGun();
+                    break;
+            }
+        }
+
+
+        function OnKeyUp(e) {
+            var key;
+
+            // Get key code
+            if (e.keyCode) {
+                key = e.keyCode;
+            } else if (document.all) {
+                key = event.keyCode;
+            } else {
+                key = ev.charCode;
+            }
+
+            // Handle key
+            switch (key) {
+
+                case KEY_T:
+                    DisableTurboMode();
+                    break;
+            }
+        }
+
+
+
+        /* Mouse Events ---------------------------------------------------------------------- */
+
+        function OnMouseMove(e) {
+            if (typeof e == 'undefined')
+                e = window.event;
+
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            return false;
+        }
+        var mouseX, mouseY;
+
+
+        function OnMouseDown(e) {
+
+            if (mouseX > 45 && mouseX < 120 && mouseY > 372 && mouseY < 428) {
+                BeginDescent();
+            }
+            else if (mouseX > 140 && mouseX < 220 && mouseY > 372 && mouseY < 428) {
+                ReloadPotatoGun();
+            }
+
+        }
+
+
+
+        /* Resize Window ------------------------------------------------------------------- */
+
+        function ResizeWindow() {
+            canvasWidth = canvas.offsetWidth;
+            canvasHeight = canvas.offsetHeight;
+            canvas.setAttribute("width", canvasWidth);
+            canvas.setAttribute("height", canvasHeight);
+            surfaceLeft = 0;
+            surfaceTop = 0;
+            surfaceWidth = canvas.offsetWidth;
+            surfaceHeight = canvas.offsetHeight - 12;
+            labelScreenSizeValue = "Window Size: " + canvasWidth + "x" + canvasHeight;
+
+            if (gunLoaded == false) {
+                ReloadPotatoGun();
+            }
+        }
+        var surfaceLeft, surfaceTop, surfaceWidth, surfaceHeight, canvasWidth, canvasHeight;
+
+
+
+        /* Load Images ------------------------------------------------------------------- */
+
+        function LoadImages() {
+
+            cImagesLoaded = 0;
+            cImagesToLoad = 25;
+
+            imgTest = new Image();
+            imgTest.onload = ImageLoadComplete;
+            imgTest.src = "Test.png";
+
+            imgLogo = new Image();
+            imgLogo.onload = ImageLoadComplete;
+            imgLogo.src = "LogoMedium.png";
+
+            imgGrass = new Image();
+            imgGrass.onload = ImageLoadComplete;
+            imgGrass.src = "Grass.jpg";
+
+            imgSkyTop = new Image();
+            imgSkyTop.onload = ImageLoadComplete;
+            imgSkyTop.src = "SkyTop.png";
+
+            imgSkyBottom = new Image();
+            imgSkyBottom.onload = ImageLoadComplete;
+            imgSkyBottom.src = "SkyBottom.png";
+
+            imgSkyCover = new Image();
+            imgSkyCover.onload = ImageLoadComplete;
+            imgSkyCover.src = "SkyCover.png";
+
+            imgShootButton = new Image();
+            imgShootButton.onload = ImageLoadComplete;
+            imgShootButton.src = "Shoot.png";
+
+            imgShootHoverButton = new Image();
+            imgShootHoverButton.onload = ImageLoadComplete;
+            imgShootHoverButton.src = "ShootHover.png";
+
+            imgReloadButton = new Image();
+            imgReloadButton.onload = ImageLoadComplete;
+            imgReloadButton.src = "Reload.png";
+
+            imgReloadButtonHover = new Image();
+            imgReloadButtonHover.onload = ImageLoadComplete;
+            imgReloadButtonHover.src = "ReloadHover.png";
+
+            imgHead = new Image();
+            imgHead.onload = ImageLoadComplete;
+            imgHead.src = "Head2.png";
+
+            imgPotatoGun = new Image();
+            imgPotatoGun.onload = ImageLoadComplete;
+            imgPotatoGun.src = "PotatoGunClear.png";
+
+            imgArmLeft = new Image();
+            imgArmLeft.onload = ImageLoadComplete;
+            imgArmLeft.src = "ArmLeft.png";
+
+            imgArmRight = new Image();
+            imgArmRight.onload = ImageLoadComplete;
+            imgArmRight.src = "ArmRight.png";
+
+            imgBody = new Image();
+            imgBody.onload = ImageLoadComplete;
+            imgBody.src = "Body.png";
+
+            imgEarLeft = new Image();
+            imgEarLeft.onload = ImageLoadComplete;
+            imgEarLeft.src = "EarLeft.png";
+
+            imgEarRight = new Image();
+            imgEarRight.onload = ImageLoadComplete;
+            imgEarRight.src = "EarRight.png";
+
+            imgEyeLeft = new Image();
+            imgEyeLeft.onload = ImageLoadComplete;
+            imgEyeLeft.src = "EyeLeft.png";
+
+            imgEyeRight = new Image();
+            imgEyeRight.onload = ImageLoadComplete;
+            imgEyeRight.src = "EyeRight.png";
+
+            imgFeet = new Image();
+            imgFeet.onload = ImageLoadComplete;
+            imgFeet.src = "Feet.png";
+
+            imgGlasses = new Image();
+            imgGlasses.onload = ImageLoadComplete;
+            imgGlasses.src = "Glasses.png";
+
+            imgHat = new Image();
+            imgHat.onload = ImageLoadComplete;
+            imgHat.src = "Hat.png";
+
+            imgMustache = new Image();
+            imgMustache.onload = ImageLoadComplete;
+            imgMustache.src = "Mustache.png";
+
+            imgNose = new Image();
+            imgNose.onload = ImageLoadComplete;
+            imgNose.src = "Nose.png";
+
+            imgTeeth = new Image();
+            imgTeeth.onload = ImageLoadComplete;
+            imgTeeth.src = "Teeth.png";
+        }
+        var cImagesLoaded, cImagesToLoad, Pieces, imgTest, imgLogo, imgGrass, imgSkyTop, imgSkyBottom, imgSkyCover, imgBackground, imgPotatoGun, imgShootButton, imgShootHoverButton, imgReloadButton, imgReloadHover, imgHead, imgArmLeft, imgArmRight, imgBody, imgEarLeft, imgEarRight, imgEyeLeft, imgEyeRight, imgFeet, imgGlasses, imgHat, imgMustache, imgNose, imgTeeth;
+
+
+        function ImageLoadComplete() {
+            cImagesLoaded++;
+            if (cImagesLoaded == cImagesToLoad) {
+                drawInterval = setInterval(function () { Draw(false, 1.0) }, 15);
+            }
+        }
+
+
+
+        /* GeneratePiecesToShoot ---------------------------------------------------------------- */
+
+        function GeneratePiecesToShoot() {
+
+            Pieces = new Array();
+            Pieces.push(new Piece("ArmLeft.png", imgArmLeft, 0, 70, 35, 0, 300, 118, 15, 3600, 310, 1, true, 0.18, 0.85, 0.6, 16, 0.0625, "sndArmLeft", 0.0));
+            Pieces.push(new Piece("ArmRight.png", imgArmRight, 0, 60, 30, 0, 300, 47, 13, 2900, 9, 1, true, 0.18, 0.85, 0.6, 15, 0.07, "sndArmRight", 0.2));
+            Pieces.push(new Piece("Body.png", imgBody, 0, 88, 44, 40, 291, 0, 5, 1100, 8, 1, true, 0.52, 0.42, 0.6, 12, 0.08, "sndBody", 1.0));
+            Pieces.push(new Piece("EarLeft.png", imgEarLeft, 0, 38, 19, 0, 314, 0, 15, 4100, 12, 1, true, 0.18, 0.85, 0.6, 15, 0.065, "sndEarLeft", 0.6));
+            Pieces.push(new Piece("EarRight.png", imgEarRight, 0, 38, 19, 0, 314, 0, 12, 2100, 348, 1, true, 0.16, 0.85, 0.6, 14, 0.066, "sndEarRight", 0.6));
+            Pieces.push(new Piece("EyeLeft.png", imgEyeLeft, 0, 20, 10, 0, 322, 0, 11, 2200, 14, 1, true, 0.12, 0.85, 0.6, 18, 0.05, "sndEyeLeft", 1.0));
+            Pieces.push(new Piece("EyeRight.png", imgEyeRight, 0, 20, 10, 0, 322, 0, 17, 2400, 32, 1, true, 0.14, 0.85, 0.6, 17, 0.059, "sndEyeRight", 1.0));
+            Pieces.push(new Piece("Feet.png", imgFeet, 0, 84, 42, 0, 288, 0, 6, 1900, 8, 1, true, 0.39, 0.85, 0.6, 14, 0.071, "sndFeet", 0.4));
+            Pieces.push(new Piece("Glasses.png", imgGlasses, 0, 66, 33, 100, 300, 0, 14, 3100, 340, 1, true, 0.15, 0.85, 0.6, 14, 0.071, "sndGlasses", 0.4));
+            Pieces.push(new Piece("Hat.png", imgHat, 0, 72, 36, 0, 297, 0, 9, 2400, 15, 1, true, 0.18, 0.85, 0.6, 13, 0.077, "sndHat", 0.3));
+            Pieces.push(new Piece("Mustache.png", imgMustache, 0, 60, 30, 0, 307, 0, 17, 3300, 332, 1, true, 0.18, 0.85, 0.6, 13, 0.077, "sndMustache", 0.2));
+            Pieces.push(new Piece("Nose.png", imgNose, 0, 46, 23, 0, 303, 0, 22, 3400, 21, 1, true, 0.18, 0.85, 0.6, 15, 0.065, "sndNose", 1.0));
+            Pieces.push(new Piece("Teeth.png", imgTeeth, 0, 44, 22, 0, 312, 0, 11, 1400, 14, 1, true, 0.18, 0.85, 0.6, 11, 0.08, "sndTeeth", 0.5));
+        }
+
+
+        function Piece(file, image, frame, size, radius, xInitial, yInitial, rInitial, velocity, duration, rotation, spin, bounce, bDampening, vDampening, rDampening, yEaseLevel, yEaseFactor, sndBounce, sndVolume) {
+
+            /* User Defined Properties */
+            this.file = file;               // Name of the piece which is used for accessibility and debugging.
+            this.image = image;             // Image representing the piece of the animation.
+            this.frame = frame;             // Frame of the animation.
+            this.diameter = size;           // Diameter of the object.
+            this.radius = radius;           // Radius of the object.
+            this.xInitial = xInitial;       // Initial X location of the piece.
+            this.yInitial = yInitial;       // Initial Y location of the piece.
+            this.rInitial = rInitial;       // Initial rotation of the piece.
+            this.velocity = velocity;       // Rate which the object is flying.
+            this.duration = duration;       // Milliseconds before the object initially hits the ground.
+            this.rotation = rotation;       // Rate at which the object is rotating.
+            this.spin = spin;               // Direction which the object is rotating - forward:1, backward:2
+            this.bounce = bounce;           // Whether the piece should bounce off the bottom.
+
+            this.bDampening = bDampening;   // Rate at which the bounce dampens.
+            this.vDampening = vDampening;   // Rate at which the horizontal velocity dampens in addition to resistance (sceneFPS).
+            this.rDampening = rDampening;   // Rate at which the rotation dampens.
+            this.yEaseLevel = yEaseLevel;   // Number of times that the piece eases toward the top of the arc.
+            this.yEaseFactor = yEaseFactor; // Amount that the easing decreases.
+            this.sndVolume = sndVolume;     // Volume of the sound.
+            this.sndLastPlay = 0;           // The last time the sound was played.
+
+            /* References to document objects. */
+            this.sndBounce = document.getElementById(sndBounce);    // Sound that's played when the images bounces.
+
+            /* Generated Properties */
+            this.sndDampening = 1.0;        // Amount to dampen the sound volume by.
+            this.xCurrent = xInitial;       // Current X location of the piece.
+            this.yCurrent = yInitial;       // Current Y location of the piece.
+            this.rCurrent = rInitial;       // Current rotation of the piece.
+            this.hDirection = 1;            // Horizontal direction which the object is moving - forward:1, backward:2
+            this.vDirection = 1;            // Vertical direction which the object is moving - down:1, up:2
+            this.entrance = true;           // The piece is still leaving the cannon.
+            this.entranceTime;              // Time when the piece leaves the cannon.
+            this.animating = false;         // Whether this piece is moving.
+            this.bouncing = false;          // Whether the piece has started bouncing off the bottom.
+            this.lastMoveTime;              // Time when the last move occured for this piece.
+            this.fallingvelocity = 0;       // Rate at which the pieces fell vertically during the duration.
+            this.yBounceTop = yInitial;     // Height of bounce this iteration.
+            this.yEaseDown = false;         // Whether this piece should ease down after bouncing.
+            this.easeCount = 0;             // Number of stages in the ease count.
+            this.easeStage = 0;             // Current stage of the ease cycle.
+            this.resetEaseLevel = true;     // Whether we need to calculate the bounce top amount.
+            this.sndBounce.volume = 1.0;    // Start with the volume at the highest level.
+        }
+
+
+
+        /* Reset ---------------------------------------------------------------------------- */
+
+        function Reset() {
+            fpsMeter.Hide();
+            labelMoves = "";
+            labelMovesValue = "";
+            labelDuration = "";
+            labelDurationValue = "";
+            labelFPS = "";
+            labelFPSValue = "";
+            sceneAnimating = false;
+            sceneDescending = false;
+            animateInTurboMode = false;
+        }
+
+
+
+        /* ReloadPotatoGun ------------------------------------------------------------------- */
+
+        function ReloadPotatoGun() {
+            GeneratePiecesToShoot();
+            Reset();
+
+            displayHead = true;
+            headTopCurrent = -204;
+            headTopStop = 200;
+            sceneReloading = true;
+            gunLoaded = true;
+        }
+        var sceneReloading = false, gunLoaded = false;
+
+
+
+        /* BeginDescent ---------------------------------------------------------------------- */
+
+        function BeginDescent() {
+            if (gunLoaded) {
+                headTopStop = 260;
+                sceneDescending = true;
+                sceneMoves = 0;
+                gunLoaded = false;
+            }
+        }
+        var sceneDescending = false, headTopCurrent = 200, headTopStop = 280, displayHead = true;
+
+
+
+        /* TurboMode ------------------------------------------------------------------------- */
+
+        window.addEventListener("message", TurboModeDraw, true);
+
+        function EnableTurboMode() {
+            turboModeEnabled = true;
+        }
+
+        function DisableTurboMode() {
+            turboModeEnabled = false;
+        }
+
+        function TurboModeDraw(e) {
+            Draw(true, e.data);
+        }
+
+        var turboModeEnabled = false, animateInTurboMode = false;
+
+
+        /* BeginAnimation -------------------------------------------------------------------- */
+
+        function BeginAnimation() {
+
+            labelMoves = "Score";
+            labelDuration = "Seconds";
+            labelFPS = "FPS";
+            fpsMeter.Show();
+
+            sceneStartTime = new Date();
+            sceneAnimating = true;
+            sceneMoves = 0;
+            sceneFPS = 60;
+            pieceMoves = 0;
+
+            for (var i = 0; piece = Pieces[i]; i++) {
+                piece.animating = true;
+            }
+
+            try {
+				sndWhoosh.volume = 1.0;
+				sndWhoosh.play();
+			} catch(e) {
+				// issue playing sound, fail silently.
+			}
+            animateInTurboMode = (turboModeEnabled == true) ? true : false;
+        }
+        var sceneStartTime, sceneAnimating = false, sceneMoves, sceneFPS, sceneFPSFactor, pieceMoves;
+
+
+
+        /* Draw Routine -------------------------------------------------------------------- */
+
+        function Draw(propogatedDrawMessage, alphaLevel) {
+
+            var currentTime = new Date();
+
+            // Draw the background for the scene.
+
+            if (propogatedDrawMessage == false) {
+                drawingSurface.clearRect(0, 0, canvasWidth, canvasHeight);
+                drawingSurface.fillStyle = 'Black';
+                drawingSurface.fillRect(surfaceTop, surfaceLeft, surfaceWidth, surfaceHeight);
+                drawingSurface.drawImage(imgSkyTop, 0, 0, canvasWidth, 286);
+                drawingSurface.drawImage(imgSkyBottom, 0, 286, canvasWidth, (canvasHeight - 286 - 74));
+                drawingSurface.drawImage(imgGrass, 0, canvasHeight - 74, canvasWidth, 74);
+                drawingSurface.drawImage(imgLogo, 34, 24, 170, 129);
+            }
+
+            // Reload the potato head.
+            if (sceneReloading == true) {
+                if (headTopCurrent >= headTopStop) {
+                    sceneReloading = false;
+
+					try {
+						sndLand.volume = 1.0;
+						sndLand.play();
+					} catch(e) {
+						// issue playing sound, fail silently.
+					}
+                }
+                else {
+                    headTopCurrent = headTopCurrent + 15;
+                }
+            }
+
+            // Animate the potato head down the funnel.
+            if (sceneDescending == true) {
+                if (headTopCurrent >= headTopStop) {
+                    sceneDescending = false;
+                    displayHead = false;
+                    BeginAnimation();
+                }
+                else {
+                    headTopCurrent = headTopCurrent + 8;
+                }
+            }
+
+            // Draw the potato head if its still visible.
+            if (displayHead == true) {
+                drawingSurface.drawImage(imgHead, 63, headTopCurrent, 80, 96);
+            }
+
+            // Animate the potato head pieces around the scene.
+            if (sceneAnimating == true) {
+
+                sceneMoves++;
+
+                var duration = new Date(currentTime - sceneStartTime);
+                sceneFPS = Math.ceil(1000 / (duration.getTime() / sceneMoves));
+                sceneFPSFactor = (sceneFPS / 60) > 1 ? 1 : (sceneFPS / 60);
+
+                var stillAnimating = false;
+                for (var i = 0; piece = Pieces[i]; i++) {
+
+                    drawingSurface.save();
+
+                    if (piece.animating == true) {
+
+                        stillAnimating = true;
+                        pieceMoves++;
+
+                        // Determine the next horizontal movement.
+                        if (piece.hDirection == 1) {
+                            if (piece.xCurrent + piece.velocity + piece.diameter > surfaceWidth) {
+                                piece.xCurrent = surfaceWidth - piece.diameter;
+                                piece.hDirection = 2;
+                                piece.spin = (piece.spin == 1) ? piece.spin = 2 : piece.spin = 1;
+                                PlaySound(piece);
+                            }
+                            else {
+                                piece.xCurrent += piece.velocity;
+                            }
+                        }
+                        else {
+                            if (piece.xCurrent - piece.velocity < 0) {
+                                piece.xCurrent = 0;
+                                piece.hDirection = 1;
+                                piece.spin = (piece.spin == 1) ? piece.spin = 2 : piece.spin = 1;
+                                PlaySound(piece);
+                            }
+                            else {
+                                piece.xCurrent = piece.xCurrent - piece.velocity;
+                            }
+                        }
+
+                        // If we're out of the cannon start spinning and falling.
+                        if (piece.entrance == false || piece.xCurrent > 216) {
+
+                            if (piece.entrance == true) {
+                                piece.entrance = false;
+                                piece.entranceTime = new Date();
+                            }
+
+                            // Determine the next vertical movement.
+                            if (piece.vDirection == 1) {
+
+                                if (piece.yEaseDown == true) {
+                                    if (piece.easeStage <= piece.easeCount) {
+                                        piece.yCurrent = piece.yCurrent + ((piece.fallingvelocity * piece.yEaseFactor) * piece.easeStage);
+                                        piece.easeStage = piece.easeStage + (1 / sceneFPSFactor);
+                                    }
+                                    else {
+                                        piece.yEaseDown = false;
+                                        piece.resetEaseLevel = true;
+                                    }
+                                }
+                                else {
+
+                                    var pieceDuration = new Date(currentTime - piece.entranceTime);
+                                    var yNext = (piece.bouncing == true) ? (piece.yCurrent + piece.fallingvelocity) : (piece.yInitial + ((surfaceHeight - piece.yInitial - piece.diameter) * (pieceDuration.getTime() / piece.duration)));
+
+                                    if (yNext + piece.diameter > surfaceHeight) {
+
+                                        if (piece.bouncing == false) {
+                                            piece.fallingvelocity = Math.floor((surfaceHeight - piece.yInitial - piece.diameter) / sceneFPS);
+                                        }
+
+                                        piece.bouncing = true;
+                                        piece.yCurrent = surfaceHeight - piece.diameter;
+                                        piece.vDirection = 2;
+                                        piece.yBounceTop += ((surfaceHeight - piece.yBounceTop) * (piece.bDampening / sceneFPSFactor));
+                                        piece.velocity = piece.velocity * piece.vDampening;
+                                        piece.rotation = piece.rotation * piece.rDampening;
+                                        piece.animating = (piece.bounce == true) ? true : false;
+                                        piece.animating = (surfaceHeight - piece.yBounceTop > 10) ? true : false;
+                                        PlaySound(piece);
+                                    }
+                                    else {
+                                        piece.yCurrent = yNext;
+                                    }
+                                }
+                            }
+                            else {
+                                var yNext = piece.yCurrent - piece.fallingvelocity;
+                                if (yNext < piece.yBounceTop) {
+
+                                    if (piece.resetEaseLevel == true) {
+                                        piece.easeCount = Math.floor(piece.yEaseLevel * ((surfaceHeight - piece.yBounceTop) / surfaceHeight));
+                                        piece.easeStage = piece.easeCount;
+                                        piece.resetEaseLevel = false;
+                                    }
+
+                                    if (piece.easeStage > 0) {
+                                        piece.yCurrent = piece.yCurrent - ((piece.fallingvelocity * piece.yEaseFactor) * piece.easeStage);
+                                        piece.easeStage = piece.easeStage - (1 / sceneFPSFactor);
+                                    }
+                                    else {
+                                        piece.easeStage = 0;
+                                        piece.vDirection = 1;
+                                        piece.yEaseDown = true;
+                                    }
+                                }
+                                else {
+                                    piece.yCurrent = yNext;
+                                }
+                            }
+
+                            // Determine the next rotation.
+                            piece.rCurrent = (piece.spin == 1) ? (piece.rCurrent + piece.rotation) : (piece.rCurrent - piece.rotation);
+                        }
+
+                    }
+
+                    drawingSurface.translate(piece.xCurrent + piece.radius + surfaceLeft, piece.yCurrent + piece.radius + surfaceTop);
+                    drawingSurface.rotate(piece.rCurrent * Math.PI / 180);
+
+                    if (piece.entrance == true) {
+                        drawingSurface.drawImage(piece.image, -piece.radius, -17, piece.diameter, 34);
+                    }
+                    else {
+                        if (!!piece.animating == false && !!propogatedDrawMessage == true) {
+                        }
+                        else {
+                            drawingSurface.globalAlpha = alphaLevel;
+                            drawingSurface.drawImage(piece.image, -piece.radius, -piece.radius, piece.diameter, piece.diameter);
+                            drawingSurface.globalAlpha = 1.0;
+                        }
+                    }
+                    drawingSurface.restore();
+                }
+            }
+
+            // Draw the potato gun.
+            if (sceneMoves < 45) {
+                drawingSurface.drawImage(imgSkyBottom, 0, 0, 1, ((90 / (canvasHeight - 286 - 74)) * 363), 0, 286, 221, 90);
+            }
+            drawingSurface.drawImage(imgPotatoGun, 0, 277, 226, 79);
+
+            var cursor = "default";
+
+            if (mouseX > 45 && mouseX < 120 && mouseY > 372 && mouseY < 428) {
+                drawingSurface.drawImage(imgShootHoverButton, 30, 360, 100, 80);
+                cursor = "pointer";
+            }
+            else {
+                drawingSurface.drawImage(imgShootButton, 30, 360, 100, 80);
+
+            }
+
+            if (mouseX > 140 && mouseX < 220 && mouseY > 372 && mouseY < 428) {
+                drawingSurface.drawImage(imgReloadButtonHover, 130, 360, 100, 80);
+                cursor = "pointer";
+            }
+            else {
+                drawingSurface.drawImage(imgReloadButton, 130, 360, 100, 80);
+            }
+
+            // Update cursor
+            if (document.body.style.cursor != cursor) document.body.style.cursor = cursor;
+
+            if (stillAnimating == true) {
+                labelMovesValue = pieceMoves;
+                labelDurationValue = duration.getSeconds() + "." + Math.floor(duration.getMilliseconds() / 100);
+                labelFPSValue = (sceneFPS >= 60) ? 60 : sceneFPS;
+            }
+
+            if (stillAnimating == true || fpsMeter.visible == false) {
+                fpsMeter.Draw(pieceMoves);
+            }
+
+            if (propogatedDrawMessage == false) {
+                drawingSurface.fillStyle = '#49a6de';
+                drawingSurface.textAlign = "center";
+
+                drawingSurface.font = "13pt Verdana Bold";
+                drawingSurface.fillText(labelBrowserValue, surfaceWidth - 115, 50);
+
+                drawingSurface.font = "9pt Verdana";
+                drawingSurface.fillText(labelScreenSizeValue, surfaceWidth - 115, 67);
+
+                drawingSurface.font = "22pt Verdana";
+                drawingSurface.fillText(labelFPSValue, surfaceWidth - 115, 178);
+                drawingSurface.font = "9pt Verdana";
+                drawingSurface.fillText(labelFPS, surfaceWidth - 115, 194);
+
+                drawingSurface.font = "22pt Verdana";
+                drawingSurface.fillText(labelMovesValue, surfaceWidth - 115, 238);
+                drawingSurface.font = "9pt Verdana";
+                drawingSurface.fillText(labelMoves, surfaceWidth - 115, 254);
+
+                drawingSurface.font = "22pt Verdana";
+                drawingSurface.fillText(labelDurationValue, surfaceWidth - 115, 298);
+                drawingSurface.font = "9pt Verdana";
+                drawingSurface.fillText(labelDuration, surfaceWidth - 115, 314);
+
+                if (animateInTurboMode == true) {
+                    drawingSurface.font = "13pt Verdana";
+                    drawingSurface.fillText("Turbo Mode Enabled", surfaceWidth - 115, 358);
+                }
+            }
+
+
+            // When we're in TurboMode we post messages back to ourselves to continue moving the pieces
+            // while the CPU is idle. This will result in the animation occuring faster than the
+            // screen can refresh.
+            if (stillAnimating == true && animateInTurboMode == true && propogatedDrawMessage == false) {
+                window.postMessage("0.1", "*");
+                window.postMessage("0.2", "*");
+                window.postMessage("0.3", "*");
+                window.postMessage("0.4", "*");
+                window.postMessage("0.5", "*");
+                window.postMessage("0.6", "*");
+            }
+
+        }
+        var labelMoves = "", labelMovesValue = "", labelDuration = "", labelDurationValue = "", labelFPS = "", labelFPSValue = "", labelScreenSize = "", labelScreenSizeValue = "", labelBrowser = "", labelBrowserValue = "";
+
+
+
+        function PlaySound(piece) {
+//            piece.sndDampening = 1.6 - ((piece.yBounceTop / surfaceHeight));
+//            piece.sndDampening = (piece.sndDampening > 1.0) ? 1.0 : piece.sndDampening;
+//            var newVolume = piece.sndVolume * piece.sndDampening;
+//            if (newVolume > 0) {
+//                piece.sndBounce.volume = newVolume;
+//                piece.sndBounce.currentTime = 0;
+//                piece.sndBounce.play();
+//            }
+
+        }
+
+
+    </script>
+
+    <meta name="t_omni_demopage" content="1" />
+</head>
+<body>
+<!--    <canvas id="surface"></canvas>
+    <audio id="sndLand" preload src="Land.mp3"></audio>
+    <audio id="sndWhoosh" preload src="Whoosh.mp3"></audio>
+    <audio id="sndArmLeft" preload src="bounce.mp3"></audio>
+    <audio id="sndArmRight" preload src="bounce.mp3"></audio>
+    <audio id="sndBody" preload src="bounce.mp3"></audio>
+    <audio id="sndEarLeft" preload src="bounce.mp3"></audio>
+
+    <audio id="sndEarRight" preload src="bounce.mp3"></audio>
+    <audio id="sndEyeLeft" preload src="bounce.mp3"></audio>
+    <audio id="sndEyeRight" preload src="bounce.mp3"></audio>
+    <audio id="sndFeet" preload src="bounce.mp3"></audio>
+    <audio id="sndGlasses" preload src="bounce.mp3"></audio>
+    <audio id="sndHat" preload src="bounce.mp3"></audio>
+    <audio id="sndMustache" preload src="bounce.mp3"></audio>
+    <audio id="sndNose" preload src="bounce.mp3"></audio>
+    <audio id="sndTeeth" preload src="bounce.mp3"></audio>
+
+    <a onclick="window.location='../../Default.html';" href="#" title="Return to Test Drive Demos" id="returnbutton">Return to Test Drive Demos</a>
+</body>
+<div class="srdescription">
+    Thanks for checking out this site. This demo uses animation techniques to move the potato pieces around on the screen. The frames per second are taken into account at runtime and used as resistance for
+    the velocity of the objects. The slower the objects are moving across the screen, the more resistance on the model. Press "s" to shoot and "r" to reload. It's a fun way to demonstrate how the browsers
+    overall performance, from hardware accelerated graphics, to compiled javascript, to hardware accelerated canvas, will enable a new generation of HTML5 applications. The purpose of these demos is to convey
+    a concept and not intended to be used as a best practice for web development. It’s not the cleanest code, and in some places we took shortcuts to get more demos to you. Enjoy!
+</div>-->
+</body>
+</html>

@@ -1,0 +1,7 @@
+<project name="jsutil">
+	<target name="compile">
+		<mkdir dir="bin" />
+		<javac srcdir="src" destdir="bin">
+		</javac>
+	</target>
+</project>

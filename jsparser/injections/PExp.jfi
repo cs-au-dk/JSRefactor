@@ -1,0 +1,12 @@
+interface IExpOrStmt
+
+code
+	/**
+	 * Returns true if this expression type can be used as a left-hand value.
+	 * The three classes for which true is returned are:
+	 * {@link ANameExp}, {@link APropertyExp}, and {@link ADynamicPropertyExp}
+	 */
+	public boolean isAssignable() {
+		return false;
+	}
+endcode

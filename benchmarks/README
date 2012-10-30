@@ -1,0 +1,31 @@
+These are the benchmarks used for evaluating our refactorings.
+
+They are grouped into four subdirectories: 10k/ for entries from the
+10K apart contest, chrome/ for Chrome experiments, msie/ for MSIE
+Testdrive benchmarks, and google/ for some Google benchmarks.
+
+For evaluation purposes, the benchmarks have been modified in the
+following way:
+  - Several benchmarks have annotations of the form "/* module M */"
+    and "/* end M */" to facilitate testing of the Extract Module
+    refactoring; refactored versions of these benchmarks are stored
+    in the extracted/ subdirectories
+
+    The current version of Extract Module does strange things to
+    whitespace. Hence the whitespace in the refactored versions is
+    not always where you would expect it to be. Also, in some
+    benchmarks spurious semicolons were inserted to work around
+    deficiencies in the automated testing setup (_not_ the
+    implementation itself!).
+  - In some benchmarks, top-level function definitions have
+    been reordered to group related functions together; the
+    implementation does not support this at the moment, but care has
+    been taken to only perform reorderings that the implementation
+    could easily prove to be behaviour preserving
+    flatwar.html, apophis.html, bomomo.html
+  - In some benchmarks, extra semicolons have been inserted at the end
+    of event handler code in HTML; this is due to purely technical
+    reasons: the JavaScript code is extracted and written to a
+    temporary file; if the semicolon is missing, that code might be
+    ill-formed.
+    fractal_landscape.html (2), snowpar.html (10), bomomo.html (?)

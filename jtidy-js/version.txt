@@ -1,0 +1,3 @@
+This is a modified version of JTidy - not the original.
+
+It implements some of the "TODO" methods not implemented in the release, so jsparser can extract sufficient information from the DOM.

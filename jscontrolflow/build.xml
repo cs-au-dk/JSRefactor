@@ -1,0 +1,26 @@
+<project name="jscontrolflow">
+	<target name="clean">
+		<delete>
+			<fileset dir="bin">
+				<include name="**/*"/>
+			</fileset>
+		</delete>
+	</target>
+	<target name="compile">
+		<mkdir dir="bin" />
+		<javac destdir="bin">
+			<src path="src"/>
+			<src path="test"/>
+			<classpath>
+				<pathelement path="../jsutil/bin"/>
+				<pathelement path="../jsparser/bin"/>
+				<fileset dir="../jsutil/lib">
+					<include name="*.jar"/>
+				</fileset>
+				<fileset dir="../jsparser/lib">
+					<include name="*.jar"/>
+				</fileset>
+			</classpath>
+		</javac>
+	</target>
+</project>

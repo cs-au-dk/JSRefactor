@@ -1,0 +1,4 @@
+CP=bin:../jsparser/bin:../jscontrolflow/bin:../jtidy-js/bin:../jsutil/bin:../jsparser/lib/jdom-1.1.1.jar:../jsparser/lib/jdom-contrib-1.1.1.jar
+JSFILE=$1
+
+time java -cp $CP dk.brics.jspointers.Main $JSFILE -performance $@ >/dev/null

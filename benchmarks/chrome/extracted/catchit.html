@@ -1,0 +1,230 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Catch it!</title>
+
+    <style>
+
+        * {
+            font-family: Arial;
+        }
+
+        canvas {
+            margin: 0px;
+            padding: 0px;
+            border-right: #333 dashed;
+            border-bottom: #333 dashed;
+        }
+
+        body {
+            margin: 0px;
+            background: #fc0;
+        }
+
+        .label {
+            font-weight: bold;
+        }
+
+        .label span {
+            font-weight: normal;
+        }
+
+        img {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 1000;
+            border: 0px;
+        }
+
+    </style>
+
+    <script type="text/javascript">
+        ;
+        var State = (function() {
+            var ctx;
+            var balls = new Array();
+            var mouse = {x:-100, y:-100};
+            var prey = {x:Math.random() * 310, y:Math.random() * 310};
+            var circle = Math.PI * 2
+
+            
+            var tries = 1;
+            var score = 0;
+            var max_score = 0;
+            var inc_score = 15;
+            return {
+                ctx: ctx,
+                balls: balls,
+                mouse: mouse,
+                prey: prey,
+                circle: circle,
+                tries: tries,
+                score: score,
+                max_score: max_score,
+                inc_score: inc_score
+            };
+        })();
+        
+
+        // our ball object holder
+
+        // mouse position cache
+
+        // our prey we want to hunt
+
+        // cache 2*PI for arc()
+        
+
+        function $(id) {
+            return document.getElementById(id);
+        }
+
+        function updateStat() {
+
+            $('tries').innerHTML = State.tries;
+            $('score').innerHTML = State.score;
+
+            $('max_score').innerHTML = State.max_score;
+        }
+        var Balls = (function() {
+            function Ball(x, y, xsee, ysee) {
+
+                this.x = x;
+                this.y = y;
+                this.xsee = xsee;
+                this.ysee = ysee;
+
+                this.move = function() {
+
+                    if (this.x > 315) {
+                        this.x = 315;
+                        this.xsee = -this.xsee;
+                    } else if (this.x < 5) {
+                        this.x = 5;
+                        this.xsee = -this.xsee;
+                    }
+
+                    if (this.y > 315) {
+                        this.y = 315;
+                        this.ysee = -this.ysee;
+                    } else if (this.y < 5) {
+                        this.y = 5;
+                        this.ysee = -this.ysee;
+                    }
+
+                    this.x += this.xsee;
+                    this.y += this.ysee;
+
+                    State.ctx.beginPath();
+                    State.ctx.arc(this.x, this.y, 5, 0, State.circle, true);
+                    State.ctx.closePath();
+                    State.ctx.fill();
+                }
+            }
+            function createBall() {
+
+                do {
+                    x = Math.random() * 315;
+                    y = Math.random() * 315;
+                } while (State.prey.x <= x + 35 && x <= State.prey.x + 55 && State.prey.y <= y + 35 && y <= State.prey.y + 55);
+
+                State.balls.push(new Ball(x, y, Math.random() * 5.5 - 2.75, Math.random() * 5.5 - 2.75));
+            }
+            return {
+                createBall: createBall
+            };
+        })();
+
+        
+
+        
+
+        function init() {
+            State.ctx = $('canvas').getContext('2d');
+            clock();
+        }
+
+        function clock() {
+
+            // global clear is faster for many balls
+            State.ctx.clearRect(0, 0, 320, 320);
+
+            State.ctx.fillStyle = "#c00";
+            State.ctx.fillRect(State.prey.x, State.prey.y, 20, 20);
+
+            // we are still red
+            State.ctx.beginPath();
+            State.ctx.arc(State.mouse.x, State.mouse.y, 10, 0, State.circle, true);
+            State.ctx.closePath();
+            State.ctx.fill();
+
+            State.ctx.fillStyle = "#333";
+            for (var i = 0; i < State.balls.length; i++) {
+                State.balls[i].move();
+
+                if (
+                        State.balls[i].x <= State.mouse.x + 15 && State.mouse.x <= State.balls[i].x + 15 &&
+                        State.balls[i].y <= State.mouse.y + 15 && State.mouse.y <= State.balls[i].y + 15 &&
+                        ((State.mouse.x - State.balls[i].x) * (State.mouse.x - State.balls[i].x) + (State.mouse.y - State.balls[i].y) * (State.mouse.y - State.balls[i].y)) <= 225) {
+                    State.balls = new Array();
+
+                    if (State.max_score < State.score) {
+                        State.max_score = State.score;
+                    }
+
+                    State.score = 0;
+                    State.tries++;
+
+                    updateStat();
+                }
+            }
+
+            if (State.inc_score > 5.5) State.inc_score -= 0.2;
+
+            window.setTimeout('clock()', 20);
+        }
+
+        document.onclick = function() {
+
+            for (var i = 0; i < State.balls.length; i++) {
+                State.balls[i].xsee = -State.balls[i].xsee;
+                State.balls[i].ysee = -State.balls[i].ysee;
+            }
+        }
+
+        document.onmousemove = function(e) {
+
+            State.mouse.x = e.pageX;
+            State.mouse.y = e.pageY;
+
+            /////////////
+
+            if (State.prey.x <= State.mouse.x + 10 && State.mouse.x <= State.prey.x + 30 && State.prey.y <= State.mouse.y + 10 && State.mouse.y <= State.prey.y + 30) {
+                State.prey = {x:Math.random() * 300, y:Math.random() * 300}
+                Balls.createBall();
+                State.score += Math.floor(State.inc_score);
+                State.inc_score = 15;
+                updateStat();
+            }
+        }
+
+    </script>
+
+</head>
+
+<body onload="init()">
+<canvas id="canvas" height="320" width="320">how can you use the internet?</canvas>
+
+<div class="label">Score: <span id="score">0</span></div>
+
+<div class="label">Max-Score: <span id="max_score">0</span></div>
+
+<div class="label">Tries: <span id="tries">1</span></div>
+
+<div style="padding-top:50px;">Read the <a href="/2010/02/my-very-first-chrome-experiment/">detailed description</a>
+</div>
+<a href="http://www.xarg.org/projects/"><img src="/image/xarg-logo.png" alt="xarg open projects"/></a>
+</body>
+</html>

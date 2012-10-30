@@ -1,0 +1,19 @@
+Collection of analysis "killers" found in real-world (or semi-real-world) code:
+
+From test/10k/lines.html
+	In global scope, we have:
+		var p = document,A = "getElementById";
+	and then p[A] is used to access document.getElementById throughout the code.
+	
+From test/10k/nbody.html:
+	function clone(obj) {
+	    if (obj == null || typeof(obj) != 'object')
+	        return obj;
+	
+	    var temp = new obj.constructor();
+	    for (var key in obj)
+	        temp[key] = clone(obj[key]);
+	
+	    return temp;
+	}
+

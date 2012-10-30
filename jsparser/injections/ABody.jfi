@@ -1,0 +1,2 @@
+interface IScopeBlockNode
+interface IExceptionHandlerNode

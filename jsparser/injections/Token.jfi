@@ -1,0 +1,3 @@
+field automaticallyInserted referenced boolean
+field previous referenced Token
+field next referenced Token

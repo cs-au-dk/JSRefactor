@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+        <!--
+            © 2010 Microsoft
+
+            Thanks for checking out this site. The purpose of these demos is to convey a concept and not intended to be used as a best
+            practice for web development. Enjoy!
+        -->
+    <title>Asteroid Belt</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=9" />
+    <script type="text/javascript" src="includes/fpsometer.js"></script>
+    <link rel="stylesheet" type="text/css" href="../../includes/css/fpsometer.css" />
+    <style type="text/css">
+        .hidden
+        {
+        	position:absolute;
+            left:-10000px;
+            top:auto;
+            width:1px;
+            height:1px;
+            overflow:hidden;
+        }
+        #background
+        {
+            height: 100%;
+            width: 100%;
+            display: none;
+        }
+        body
+        {
+            overflow: hidden;
+            margin: 0px;
+            padding: 0px;
+            font-family: Segoe UI, Verdana, Arial, Sans-Serif;
+            font-size: 11pt;
+        }
+        #title
+        {
+            color: white;
+            font-family: Segoe UI, Verdana, Arial, Sans-Serif;
+            font-size: 24pt;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 100%;
+            text-align: left;
+        }
+        #returnbutton
+        {
+            position: absolute;
+            display: block;
+            top: 0px;
+            right: 6px;
+            width: 210px;
+            height: 29px;
+            background-image: url(../../includes/image/ReturnButton.png);
+            background-position: left top;
+            text-indent: -9999px;
+        }
+        #copyright
+        {
+            color: gray;
+            font-size: 8pt;
+            position: absolute;
+            bottom: 3px;
+            right: 6px;
+            width: 100%;
+            text-align: right;
+        }
+        #canvas1
+        {
+            position: relative;
+            left: 0px;
+            top: 0px;
+            z-index:-1;
+        }
+    </style>
+
+    <meta name="t_omni_demopage" content="1" />
+</head>
+<body onresize="onResize()">
+    <!-- demo description for screen readers -->
+    <div class="hidden">
+        This demo is an example of the rich web experiences possible with GPU powered HTML5 Canvas. Use your mouse to move the asteroid, or let the asteroid bounce on its own to get a visceral feel of your browser's performance.
+    </div>
+    <img id="image0" src="rock1.png" style="display: none">
+    <img id="image1" src="rock2.png" style="display: none">
+    <img id="image2" src="rock3.png" style="display: none">
+
+    <img id="image3" src="rock4.png" style="display: none">
+    <img id="image4" src="rock5.png" style="display: none">
+    <canvas id="canvas1" tabIndex=-1></canvas>
+    <img id="background" src="background.jpg" />
+    <div id="title">
+        Asteroid Belt</div>
+      <a onclick="window.location='../../Default.html';" href="#"
+        title="Return to Test Drive Demos" id="returnbutton">Return to Test Drive Demos</a>
+    <span id="copyright">Background Image: NASA/JPL-Caltech</span>
+
+    <script type="text/javascript">
+        window.onload = init;
+
+        var canvasElement;
+        var ctx;
+        var STAGE_WIDTH;
+        var STAGE_HEIGHT;
+        var currentX = 0, currentY = 0, xDir = 1, yDir = 1;
+        var driftX = 1, driftY = 1;
+        var rotate = 0;
+        var z = 1;
+        var dz = .99;
+        var countSatellites;
+        var lastMouseMovement = 100;
+        var firstRun = true;
+        var centerImage;
+        var scaleImage = 1;
+        var imageWidth = 700;
+        var imageHeight = 700;
+        var movementLength = 41;
+        var movementX = [603, 612, 615, 597, 545, 508, 480, 445, 404, 376, 342, 313, 290, 271, 249, 231, 207, 178, 160, 141, 126, 112, 100, 100, 114, 131, 160, 193, 227, 267, 300, 350, 383, 414, 447, 484, 518, 548, 570, 585, 597];
+        var movementY = [173, 147, 110, 63, 56, 64, 84, 86, 104, 124, 146, 170, 194, 211, 232, 254, 280, 318, 353, 389, 424, 461, 508, 546, 585, 600, 608, 607, 595, 580, 564, 521, 495, 462, 426, 380, 341, 303, 259, 225, 184];
+        var movementOrder = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+        var movementScale = [.18, .19, .21, .21, .22, .23, .24, .25, .26, .27, .28, .29, .3, .31, .32, .33, .34, .35, .34, .33, .32, .31, .3, .29, .28, .27, .26, .25, .24, .23, .22, .21, .2, .19, .18, .17, .16, .15, .15, .16, .17];
+        var satelliteIndex = [0, 10, 20, 30, 0, 0, 0, 0, 0, 0];
+        var numSatellites = 4;
+        var numAsteroids = 20;
+        var images = [document.getElementById('image0'), document.getElementById('image1'), document.getElementById('image2'), document.getElementById('image3'), document.getElementById('image4')];
+        var asteroidField= new Array(numAsteroids);
+       	var fpsMeter = null;
+
+        function init() {
+            fpsMeter = new FpsMeter(numSatellites,"satellites");
+            fpsMeter.SetSettingsHtml("<div class='settingsLabel'>choose number of satellites</div><div class='control'><a class='control' onclick='increaseSatellites();' href='#'>increase</a></div><div class='control'><a class='control' onclick='decreaseSatellites();' href='#'>decrease</a></div>");
+
+            centerImage = images[2];
+
+            // Get the canvas element.
+            canvasElement = document.getElementById('canvas1');
+
+            STAGE_WIDTH = window.innerWidth;
+            STAGE_HEIGHT = window.innerHeight;
+            canvasElement.width = STAGE_WIDTH;
+            canvasElement.height = STAGE_HEIGHT;
+
+            if (!canvasElement || !canvasElement.getContext) return;
+
+            // Get the canvas 2d context.
+            ctx = canvasElement.getContext('2d');
+            if (!ctx || !ctx.drawImage) return;
+
+            drawBackground();
+            createAsteroidField();
+
+            if (window.addEventListener) {
+                window.addEventListener("mousemove", OnMouseMove, false);
+            }
+
+            timer = setInterval(renderLoop, 16);
+        }
+
+
+        function asteroid(x,y,z,height, width,shake, img) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.image = img;
+            this.height = z * height;
+            this.width = z * width;
+            this.shake = shake;
+            this.increase = Math.round(Math.random());
+        }
+
+        function createAsteroidField() {
+            for (i = 0; i < numAsteroids; i++) {
+                var imageNum = Math.floor((Math.random()*10)%5);
+                asteroidField[i] = new asteroid(STAGE_WIDTH * Math.random(), STAGE_HEIGHT * Math.random(), Math.random() % 0.25, 800, 800, Math.random(), images[imageNum]);
+            }
+        }
+
+        function onResize() {
+            STAGE_WIDTH = window.innerWidth;
+            STAGE_HEIGHT = window.innerHeight;
+
+            canvasElement.width = STAGE_WIDTH;
+            canvasElement.height = STAGE_HEIGHT;
+        }
+
+        function OnMouseMove(e) {
+            if (typeof e == 'undefined') e = window.event;
+
+            lastMouseMovement = new Date().getSeconds();
+
+            currentX = e.clientX;
+            currentY = e.clientY;
+        }
+
+        function clear() {
+            ctx.clearRect(0, 0, STAGE_WIDTH, STAGE_HEIGHT);
+        }
+
+        function drawBackground() {
+            ctx.drawImage(document.getElementById('background'), 0, 0, STAGE_WIDTH, STAGE_HEIGHT);
+        }
+
+        function drawAsteroids(behind, z) {
+            var draw = false;
+            for (i = 0; i < asteroidField.length; i++) {
+                if (behind) {
+                    if(asteroidField[i].z-z > 0) continue;
+                }
+                else {
+                    if(asteroidField[i].z-z < 0) continue;
+                }
+
+                ctx.drawImage(asteroidField[i].image, asteroidField[i].x + (10 * Math.sin(asteroidField[i].shake) * asteroidField[i].z), asteroidField[i].y + (10 * Math.cos(asteroidField[i].shake) * asteroidField[i].z), asteroidField[i].width, asteroidField[i].height);
+                if (asteroidField[i].increase) {
+                    asteroidField[i].shake += 0.1;
+                    if (asteroidField[i].shake >= 1) asteroidField[i].increase = false;
+                }
+                else {
+                    asteroidField[i].shake -= 0.1;
+                    if (asteroidField[i].shake <= -1) asteroidField[i].increase = true;
+                }
+            }
+        }
+
+        function drawSatellites(behind, increment) {
+            for (j = 0; j < numSatellites; j++) {
+                var satelliteImage = images[j % 5];
+                if (movementOrder[satelliteIndex[j]] == behind) ctx.drawImage(satelliteImage, -50 + movementX[satelliteIndex[j]] * scaleImage - imageWidth / 2, -50 + movementY[satelliteIndex[j]] * scaleImage - imageHeight / 2, imageWidth * movementScale[satelliteIndex[j]], imageHeight * movementScale[satelliteIndex[j]]);
+
+                if (increment) {
+                    satelliteIndex[j] = satelliteIndex[j] + 1;
+                    if (satelliteIndex[j] >= movementLength) satelliteIndex[j] = 0;
+                }
+            }
+        }
+
+        function scale() {
+            if (rotate > Math.PI * 2) { rotate = 0; } else { rotate = rotate + 10 / 360; }
+            if (z < .1) {
+                dz = 1 / dz;
+                firstRun = false;
+            }
+            if (z > .95 && firstRun == false) { dz = 1 / dz; }
+            z = z * dz;
+        }
+
+
+        function draw(x, y) {
+            drawBackground();
+
+            ctx.save();
+            ctx.translate(driftX, driftY);
+
+            drawAsteroids(true, z);
+            ctx.restore();
+
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(z, z);
+            ctx.rotate(rotate);
+
+            drawSatellites(true, false);
+            ctx.drawImage(centerImage, -imageWidth / 2, -imageHeight / 2, imageWidth, imageHeight);
+            drawSatellites(false, true);
+
+            ctx.restore();
+
+            ctx.save();
+            ctx.translate(driftX, driftY);
+            drawAsteroids(false, z);
+            if (driftX >= STAGE_WIDTH || driftY >= STAGE_HEIGHT) {
+                driftX = -STAGE_WIDTH;
+                driftY = -STAGE_HEIGHT;
+            }
+            else {
+                driftX++;
+                driftY++;
+            }
+            ctx.restore();
+
+            scale();
+            fpsMeter.Draw(numSatellites);
+
+        }
+
+        function increaseSatellites() {
+            if (numSatellites < 10) numSatellites++;
+            var space = 40 / numSatellites;
+            for (j = 0; j < numSatellites; j++) satelliteIndex[j] = space * j;
+        }
+
+        function decreaseSatellites() {
+            if (numSatellites > 1) numSatellites--;
+            var space = 40 / numSatellites;
+            for (j = 0; j < numSatellites; j++) satelliteIndex[j] = space * j;
+        }
+
+
+        function renderLoop() {
+            var now = new Date().getSeconds();
+            if (now - lastMouseMovement > 1) bounce();
+            draw(currentX, currentY);
+        }
+
+        function bounce() {
+            if (currentX > STAGE_WIDTH || currentX < 0) xDir *= -1;
+            if (currentY > STAGE_HEIGHT || currentY < 0) yDir *= -1;
+
+            currentX += 10*xDir;
+            currentY += 10*yDir;
+        }
+
+
+    </script>
+</body>
+</html>

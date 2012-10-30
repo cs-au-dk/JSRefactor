@@ -1,0 +1,198 @@
+<!DOCTYPE HTML>
+<html>
+ <head>
+
+  <title>Shoals of fish</title>
+
+  <style type="text/css">
+	body{
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+		background: black;
+		color: white;
+		text-align: right;
+		font-family: Arial, Helvetica, sans-serif;
+		font-size: 0.8em;
+	}
+  </style>
+ </head>
+
+ <body>
+<canvas id="canapea"></canvas>
+
+<a href="http://www.chromeexperiments.com/detail/aquarium/" style="float:left;"><img src="badge.png" alt="See my Experiment on ChromeExperiments.com" /></a>
+<p>Try and catch them but you'll just scare them away. Poor little fish.</p>
+<script type="text/javascript">
+ ;
+ var Global = (function() {
+     var context = document.getElementById('canapea').getContext('2d');
+     var mousex=0,mousey=0;
+     var imagine=new Image();
+     imagine.src="fish.png";
+     return {
+         context: context,
+         mousex: mousex,
+         mousey: mousey,
+         imagine: imagine
+     };
+ })();
+ var Pestisor = (function() {
+     function pestisor(){
+             this.x=Math.random()*Global.context.canvas.width;
+             this.y=Math.random()*Global.context.canvas.height;
+             this.vx=0;
+             this.vy=0;
+
+             this.move=pestisor_move;
+             this.draw=pestisor_draw;
+     }
+     function pestisor_move(){
+             //the speed limit
+             //if(this.vx>3)this.vx=3;
+             //if(this.vx<-3)this.vx=-3;
+             //if(this.vy>3)this.vy=3;
+             //if(this.vy<-3)this.vy=-3;
+
+
+             this.x+=this.vx;
+             this.y+=this.vy;
+             this.vx*=0.9;
+             this.vy*=0.9;
+             this.vx+=(Math.random()-0.5)*0.4;
+             this.vy+=(Math.random()-0.5)*0.4;
+
+
+
+
+             //tendenci to go towards center;)
+             this.x=(this.x*500+Global.context.canvas.width/2)/501;
+             this.y=(this.y*500+Global.context.canvas.height/2)/501;
+     }
+     function angle(x,y){//the strangest of functions
+             var angle=0;
+             if(x<0){
+                     angle+=Math.PI;
+             }
+             if(y<0){
+                     y=-y;
+                     x=-x;
+             }
+             angle+=Math.atan(y/x);
+             return angle
+     }
+     function pestisor_draw(){
+             Global.context.save();
+             Global.context.beginPath();
+
+             Global.context.translate(this.x,this.y)
+             Global.context.rotate(angle(this.vx,this.vy));
+             Global.context.drawImage(Global.imagine,-10,-5);
+
+             //context.arc(this.x,this.y,5,0,Math.PI*2,true);//this is to print balls instead of fish.png
+
+             Global.context.fillStyle = 'white';
+             Global.context.fill();
+             Global.context.restore();
+     }
+     return {
+         pestisor: pestisor
+     };
+ })();
+ var Main = (function() {
+     var pesti=new Array();
+     function begin(){
+             for(var i=0;i<100;i++){
+                    var temp=new Pestisor.pestisor();
+                    pesti.push(temp);
+             }
+
+    }
+     function work(){
+             var x;
+             Global.context.save();
+             Global.context.beginPath();
+             Global.context.fillStyle = 'black';
+             Global.context.strokeStyle ='white';
+             Global.context.rect(0,0,Global.context.canvas.width,Global.context.canvas.height);
+             Global.context.fill();
+             Global.context.stroke();
+             Global.context.restore();
+
+              for(x in pesti){
+                     var y;
+                     for(y in pesti){
+                             if(y!=x){
+                                     var dx=pesti[y].x-pesti[x].x;
+                                     var dy=pesti[y].y-pesti[x].y;
+                                     var d=Math.sqrt(dx*dx+dy*dy);
+                                     if(d<40){
+                                             pesti[x].vx+=20*(-dx/(d*d));
+                                             pesti[x].vy+=20*(-dy/(d*d));
+                                     }else if(d<100){
+                                             pesti[x].vx+=0.07*(dx/d);
+                                             pesti[x].vy+=0.07*(dy/d);
+                                     }
+                             }
+                     }
+                     var dx=Global.mousex-pesti[x].x;
+                     var dy=Global.mousey-pesti[x].y;
+                     var d=Math.sqrt(dx*dx+dy*dy);
+                     if(d<100){
+                             pesti[x].vx+=1*(-dx/(d));
+                             pesti[x].vy+=1*(-dy/(d));
+                     }
+
+                     pesti[x].move();
+                     pesti[x].draw();
+             }
+
+     }
+     return {
+         begin: begin,
+         work: work
+     };
+ })();
+ var Events = (function() {
+     function mmouse(event) {
+            Global.mousex=event.pageX;
+            Global.mousey=event.pageY;
+     }
+     Global.context.canvas.onmousemove = mmouse;
+     function resize_context(){
+            Global.context.canvas.width=window.innerWidth;
+            Global.context.canvas.height=window.innerHeight-100;
+    }
+     window.onresize=resize_context;
+     return {
+         resize_context: resize_context
+     };
+ })();
+
+
+
+
+//class with pestisor
+
+
+
+
+
+ //the bank o fish
+
+
+
+
+
+//it works, don't touch
+
+
+
+onLoad=Events.resize_context();
+
+onLoad=Main.begin();
+setInterval(Main.work,10);
+
+</script>
+</body>
+</html>

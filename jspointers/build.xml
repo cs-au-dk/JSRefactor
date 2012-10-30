@@ -1,0 +1,69 @@
+<project name="jspointers">
+	
+	<path id="runtime-classpath">
+		<pathelement path="bin"/>
+		<pathelement path="../jsutil/bin"/>
+		<pathelement path="../jsparser/bin"/>
+		<pathelement path="../jscontrolflow/bin"/>
+		<fileset dir="../jsutil/lib">
+			<include name="*.jar"/>
+		</fileset>
+		<fileset dir="../jsparser/lib">
+			<include name="*.jar"/>
+		</fileset>
+	</path>
+	
+	<path id="compile-classpath">
+		<pathelement path="../jsutil/bin"/>
+		<pathelement path="../jsparser/bin"/>
+		<pathelement path="../jscontrolflow/bin"/>
+		<fileset dir="../jsutil/lib">
+			<include name="*.jar"/>
+		</fileset>
+		<fileset dir="../jsparser/lib">
+			<include name="*.jar"/>
+		</fileset>
+	</path>
+	
+	<target name="clean">
+		<delete>
+			<fileset dir="bin">
+				<include name="**/*"/>
+			</fileset>
+		</delete>
+	</target>
+	
+	<target name="compile">
+		<mkdir dir="bin" />
+		<javac destdir="bin">
+			<src path="src"/>
+			<src path="harness"/>
+			<src path="testsrc"/>
+			<classpath refid="compile-classpath"/>
+		</javac>
+		<copy todir="bin">
+			<fileset dir="src">
+				<exclude name="**/*.java"/>
+				<exclude name="**/.*"/>
+			</fileset>
+			<fileset dir="harness">
+				<exclude name="**/*.java"/>
+				<exclude name="**/.*"/>
+			</fileset>
+			<fileset dir="testsrc">
+				<exclude name="**/*.java"/>
+				<exclude name="**/.*"/>
+			</fileset>
+		</copy>
+	</target>
+	
+	<target name="test">
+		<mkdir dir="output/instrument"/>
+		<junit printsummary="true" fork="true">
+			<test name="dk.brics.jspointers.test.RunInstrumentTests" todir="output/instrument">
+				<formatter usefile="true" type="xml"/>
+			</test>
+			<classpath refid="runtime-classpath"/>
+		</junit>
+	</target>
+</project>

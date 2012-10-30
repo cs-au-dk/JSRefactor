@@ -1,0 +1,948 @@
+Package dk.brics.jsparser;
+
+Helpers
+
+	source_character = [0..0xffff];
+	
+	tab = 0x0009;
+	vtab = 0x000B;
+	form_feed = 0x000C;
+	space = 0x0020;
+	nbsp = 0x00A0;
+	byte_order_mark = 0xFEFF;
+	
+	whitespace_char = tab | vtab | form_feed | space | nbsp | byte_order_mark;
+	// Deviation: whitespace_char does not include "other Unicode space separators"
+	
+	line_feed = 0x000A;
+	carriage_return = 0x000D;
+	line_separator = 0x2028;
+	paragraph_separator = 0x2029;
+	
+	line_terminator_char = [line_feed + [carriage_return + [line_separator + paragraph_separator]]];
+	
+	decimal_digit = ['0'..'9'];
+	exponent_part = ('e'|'E') ('+'|'-')? decimal_digit+;
+	decimal_literal = (decimal_digit+ ('.' decimal_digit*)? | '.' decimal_digit+) exponent_part?; // Note: Also includes octal integer literals (prohibited in strict mode)
+	
+	hex_digit = [[['0'..'9'] + ['a'..'f']] + ['A'..'F']];
+	hexadecimal_literal = ('0x'|'0X') hex_digit+;
+	
+	single_escape_char = [[[[[[[[''' + '"'] + '\'] + 'b'] + 'f'] + 'n'] + 'r'] + 't'] + 'v'];
+	escape_char = [[[single_escape_char + decimal_digit] + 'x'] + 'u'];
+	non_escape_char = [[source_character - escape_char] - line_terminator_char];
+	
+	char_escape_sequence = single_escape_char | non_escape_char;
+	
+	hex_escape_sequence = 'x' hex_digit hex_digit;
+	unicode_escape_sequence = 'u' hex_digit hex_digit hex_digit hex_digit;
+	
+	// Deviation: ECMA prohibits decimal digits after \0, but we allow it.
+	escape_sequence = char_escape_sequence | '0' | hex_escape_sequence | unicode_escape_sequence;
+	
+	comment_char_not_asterisk = [source_character - '*'];
+	comment_char_not_slash_or_asterisk = [source_character - ['/' + '*']];
+	multi_line_comment_chars = (comment_char_not_asterisk | '*'+ comment_char_not_slash_or_asterisk)* '*'*; 
+	single_line_comment_char = [source_character - line_terminator_char];
+	
+	unicode_letter = ['a'..'z'] | ['A'..'Z']; // Deviation: Does not include all unicode letters
+	unicode_digit = ['0'..'9']; // Deviation: Does not include all unicode digits
+	identifier_start = unicode_letter | '$' | '_' | ('\' unicode_escape_sequence);
+	identifier_part = identifier_start | unicode_digit;
+	
+	identifier_name = identifier_start identifier_part*;
+	
+	line_continuation = '\' (line_terminator_char | carriage_return line_feed);
+	double_string_char = [[source_character - ['"' + '\']] - line_terminator_char] | '\' escape_sequence | line_continuation;
+	single_string_char = [[source_character - [''' + '\']] - line_terminator_char] | '\' escape_sequence | line_continuation;
+	
+	
+	
+	regexp_non_terminator = [source_character - line_terminator_char];
+	regexp_backslash_sequence = '\' regexp_non_terminator;
+	regexp_class_char = [regexp_non_terminator - [']' + '\']] | regexp_backslash_sequence;
+	regexp_class = '[' regexp_class_char* ']';
+	regexp_char = [regexp_non_terminator - ['\' + ['/' + '[']]] | regexp_backslash_sequence | regexp_class;
+	regexp_first_char = [regexp_non_terminator - ['*' + ['\' + ['/' + '[']]]] | regexp_backslash_sequence | regexp_class;
+	regexp_body = regexp_first_char regexp_char*;
+	regexp_flags = identifier_part*;
+
+States
+	stmt,binop;
+	
+Tokens
+
+	{stmt,binop} whitespace = whitespace_char+;
+	{stmt,binop} endl = carriage_return line_feed | line_terminator_char;
+	
+	{stmt,binop} multi_line_comment = '/*' multi_line_comment_chars? '*/';
+	{stmt,binop} single_line_comment = '//' single_line_comment_char*;
+	
+	{stmt,binop} break = 'break';
+	{stmt,binop->stmt} case = 'case';
+	{stmt,binop} catch = 'catch';
+	{stmt,binop} continue = 'continue';
+	{stmt,binop} debugger = 'debugger';
+	{stmt,binop} default = 'default';
+	{stmt,binop->stmt} delete = 'delete';
+	{stmt,binop} do = 'do';
+	{stmt,binop->stmt} else = 'else';
+	{stmt,binop} finally = 'finally';
+	{stmt,binop} for = 'for';
+	{stmt,binop} function = 'function';
+	{stmt,binop} if = 'if';
+	{stmt,binop->stmt} in = 'in';
+	{stmt,binop->stmt} instanceof = 'instanceof';
+	{stmt,binop->stmt} new = 'new';
+	{stmt,binop->stmt} return = 'return';
+	{stmt,binop} switch = 'switch';
+	{stmt->binop,binop} this = 'this';
+	{stmt,binop->stmt} throw = 'throw';
+	{stmt,binop} try = 'try';
+	{stmt,binop->stmt} typeof = 'typeof';
+	{stmt,binop} var = 'var';
+	{stmt,binop->stmt} void = 'void';
+	{stmt,binop} while = 'while';
+	{stmt,binop} with = 'with';
+	
+	{stmt->binop,binop} get = 'get'; // get and set are valid identifiers, see the "identifier" production
+	{stmt->binop,binop} set = 'set';
+	
+	{stmt,binop->stmt} lparen = '(';
+	{stmt->binop,binop} rparen = ')';
+	{stmt,binop->stmt} lbrack = '[';
+	{stmt->binop,binop} rbrack = ']';
+	{stmt,binop->stmt} lbrace = '{';
+	{stmt->binop,binop} rbrace = '}';
+	
+	{stmt,binop} dot = '.';
+	{stmt,binop->stmt} semicolon = ';';
+	{stmt,binop->stmt} colon = ':';
+	{stmt,binop->stmt} comma = ',';
+	
+	{stmt,binop->stmt} plus = '+';
+	{stmt,binop->stmt} minus = '-';
+	{stmt,binop->stmt} star = '*';
+	{binop->stmt} slash = '/';
+	{stmt,binop->stmt} modulo = '%';
+	{stmt,binop->stmt} xor = '^';
+	{stmt,binop->stmt} complement = '~';
+	{stmt,binop->stmt} not = '!';
+	
+	{stmt,binop->stmt} and = '&';
+	{stmt,binop->stmt} or = '|';
+	{stmt,binop->stmt} and_and = '&&';
+	{stmt,binop->stmt} or_or = '||';
+	{stmt,binop->stmt} question = '?';
+	
+	{stmt,binop->stmt} plus_plus = '++';
+	{stmt,binop->stmt} minus_minus = '--';
+	
+	{stmt,binop->stmt} gt_gt = '>>';
+	{stmt,binop->stmt} gt_gt_gt = '>>>';
+	{stmt,binop->stmt} lt_lt = '<<';
+	
+	{stmt,binop->stmt} gt = '>';
+	{stmt,binop->stmt} gt_eq = '>=';
+	{stmt,binop->stmt} lt = '<';
+	{stmt,binop->stmt} lt_eq = '<=';
+	{stmt,binop->stmt} eq_eq = '==';
+	{stmt,binop->stmt} eq_eq_eq = '===';
+	{stmt,binop->stmt} not_eq = '!=';
+	{stmt,binop->stmt} not_eq_eq = '!==';
+	
+	{stmt,binop->stmt} eq = '=';
+	{stmt,binop->stmt} star_eq = '*=';
+	{stmt,binop->stmt} slash_eq = '/=';
+	{stmt,binop->stmt} modulo_eq = '%=';
+	{stmt,binop->stmt} plus_eq = '+=';
+	{stmt,binop->stmt} minus_eq = '-=';
+	{stmt,binop->stmt} lt_lt_eq = '<<=';
+	{stmt,binop->stmt} gt_gt_eq = '>>=';
+	{stmt,binop->stmt} gt_gt_gt_eq = '>>>=';
+	{stmt,binop->stmt} and_eq = '&=';
+	{stmt,binop->stmt} xor_eq = '^=';
+	{stmt,binop->stmt} or_eq = '|=';
+	
+	// Deviation: We allow the future reserved words: class, const, enum, export, extends, import, super
+	
+	{stmt->binop,binop} null = 'null';
+	{stmt->binop,binop} true = 'true';
+	{stmt->binop,binop} false = 'false';
+	
+	// make regexp reachable
+	// FIXME: Find another way to make regexp reachable; or is this even necessary?
+	//{normal -> regexp} dummy_token = 'dummy_token_foo_bar';
+	
+	{stmt->binop,binop} id = identifier_name;
+	
+	{stmt->binop,binop} string_literal = '"' double_string_char* '"' | ''' single_string_char* ''';
+	
+	// (the comment below is outdated)
+	// NOTE: regexp_literal it lexed as a TSlash followed by the rest
+	// the state is changed to 'regexp' manually by the Lexer
+	// The lexer class also inserts the slash into the token and adjusts its position accordingly,
+	// so regexp parsers should assume that the preceeding slash is there.
+	{stmt->binop} regexp_literal = '/' regexp_body '/' regexp_flags;
+	
+	{stmt->binop,binop} number_literal = decimal_literal | hexadecimal_literal; 
+	
+Ignored Tokens
+
+	whitespace, multi_line_comment, single_line_comment, endl
+	;
+	//, endl;
+
+Productions
+
+	
+// ----------------	PROGRAM -----------------
+// ECMA Chapter 14
+
+program	{-> body}
+	=	[stmts]:statement*	{-> New body(New block(Null, [stmts.stmt]))}
+	;
+
+identifier {-> [token]:Token}
+	=	id	{-> id}
+	|	get {-> get}
+	|	set	{-> set}
+	;
+	
+// ----------------	STATEMENTS -----------------
+// ECMA Chapter 12
+
+statement	{-> stmt }
+	=	[s]:statement_without_tail	{-> s.stmt}
+	|	[s]:if_else_statement		{-> s.stmt}
+	|	[s]:short_if_statement		{-> s.stmt}
+	|	[s]:with_statement			{-> s.stmt}
+	|	[s]:labelled_statement		{-> s.stmt}
+	|	[s]:for_statement			{-> s.stmt}
+	|	[s]:for_in_statement		{-> s.stmt}
+	|	[s]:while_statement			{-> s.stmt}
+	;
+	
+statement_no_short_if	{-> stmt}
+	=	[s]:statement_without_tail			{-> s.stmt}
+	|	[s]:if_else_statement_no_short_if	{-> s.stmt}
+	|	[s]:with_statement_no_short_if		{-> s.stmt}
+	|	[s]:labelled_statement_no_short_if	{-> s.stmt}
+	|	[s]:for_statement_no_short_if		{-> s.stmt}
+	|	[s]:for_in_statement_no_short_if	{-> s.stmt}
+	|	[s]:while_statement_no_short_if		{-> s.stmt}
+	;
+
+statement_without_tail	{-> stmt}
+	=	[s]:block					{-> s.stmt}
+	|	[s]:variable_statement		{-> s.stmt}
+	|	[s]:empty_statement			{-> s.stmt}
+	|	[s]:expression_statement	{-> s.stmt}
+	|	[s]:continue_statement		{-> s.stmt}
+	|	[s]:break_statement			{-> s.stmt}
+	|	[s]:return_statement		{-> s.stmt}
+	|	[s]:switch_statement		{-> s.stmt}
+	|	[s]:throw_statement			{-> s.stmt}
+	|	[s]:debugger_statement		{-> s.stmt}
+	|	[s]:try_statement			{-> s.stmt}
+	|	[s]:function_declaration 	{-> s.stmt}
+	|	[s]:do_statement			{-> s.stmt}
+	;
+
+block	{-> stmt}
+	=	lbrace [s]:statement* rbrace	{-> New stmt.block(lbrace, New block(Null, [s.stmt]), rbrace)}
+	;
+
+variable_statement	{-> stmt}
+	=	var [vs]:variable_declaration_list semicolon	{-> New stmt.var_decl(var, [vs.var_decl], semicolon)}
+	;
+
+variable_declaration_list	{-> var_decl*}
+	=	[v]:variable_declaration										{-> [v.var_decl]}
+	|	[vs]:variable_declaration_list comma [v]:variable_declaration	{-> [vs.var_decl, v.var_decl]}
+	;
+variable_declaration_list_no_in	{-> var_decl*}
+	=	[v]:variable_declaration_no_in										{-> [v.var_decl]}
+	|	[vs]:variable_declaration_list_no_in comma [v]:variable_declaration_no_in	{-> [vs.var_decl, v.var_decl]}
+	;
+
+variable_declaration	{-> var_decl}
+	=	identifier [e]:initializer?			{-> New var_decl(identifier.token, e.eq, e.exp)}
+	;
+variable_declaration_no_in	{-> var_decl}
+	=	identifier [e]:initializer_no_in?	{-> New var_decl(identifier.token, e.eq, e.exp)}
+	;
+
+initializer	{-> eq exp}
+	=	eq [e]:assignment_expression		{-> eq e.exp}
+	;
+initializer_no_in	{-> eq exp}
+	=	eq [e]:assignment_expression_no_in	{-> eq e.exp}
+	;
+
+empty_statement	{-> stmt}
+	=	semicolon	{-> New stmt.empty(semicolon)}
+	;
+
+expression_statement {-> stmt}
+	=	[e]:expression_stm semicolon	{-> New stmt.exp(e.exp, semicolon)}
+	;
+
+short_if_statement	{-> stmt}
+	=	if lparen [e]:expression rparen [s]:statement	{-> New stmt.if(if, lparen, e.exp, rparen, s.stmt, Null, Null)}
+	;
+
+if_else_statement {-> stmt}
+	=	if lparen [e]:expression rparen [s1]:statement_no_short_if else [s2]:statement	{-> New stmt.if(if, lparen, e.exp, rparen, s1.stmt, else, s2.stmt)}
+	;
+if_else_statement_no_short_if {-> stmt}
+	=	if lparen [e]:expression rparen [s1]:statement_no_short_if else [s2]:statement_no_short_if	{-> New stmt.if(if, lparen, e.exp, rparen, s1.stmt, else, s2.stmt)}
+	;
+
+do_statement {-> stmt}
+	=	do [s]:statement while lparen [e]:expression rparen semicolon		{-> New stmt.do(do, s.stmt, while, lparen, e.exp, rparen, semicolon)}
+	;
+
+while_statement {-> stmt}
+	=	while lparen [e]:expression rparen [s]:statement					{-> New stmt.while(while, lparen, e.exp,rparen, s.stmt)}
+	;
+while_statement_no_short_if {-> stmt}
+	=	while lparen [e]:expression rparen [s]:statement_no_short_if	{-> New stmt.while(while, lparen, e.exp, rparen, s.stmt)}
+	;
+
+for_statement {-> stmt}
+	=	for lparen [i]:for_init [s1]:semicolon [e2]:expression? [s2]:semicolon [e3]:expression? rparen [s]:statement
+		{-> New stmt.for(for, lparen, i.for_init, s1, e2.exp, s2, e3.exp, rparen, s.stmt)}
+	;
+for_statement_no_short_if {-> stmt}
+	=	for lparen [i]:for_init [s1]:semicolon [e2]:expression? [s2]:semicolon [e3]:expression? rparen [s]:statement_no_short_if
+		{-> New stmt.for(for, lparen, i.for_init, s1, e2.exp, s2, e3.exp, rparen, s.stmt)}
+	;
+
+for_in_statement {-> stmt}
+	=	for lparen [l]:for_in_lvalue in [e]:expression rparen [s]:statement	
+		{-> New stmt.for_in(for, lparen, l.for_in_lvalue, in, e.exp, rparen, s.stmt)}
+	;
+for_in_statement_no_short_if {-> stmt}
+	=	for lparen [l]:for_in_lvalue in [e]:expression rparen [s]:statement_no_short_if
+		{-> New stmt.for_in(for, lparen, l.for_in_lvalue, in, e.exp, rparen, s.stmt)}
+	;
+
+for_init {-> for_init}	
+	=	[e]:expression_no_in						{-> New for_init.exp(e.exp)}
+	|	var [vs]:variable_declaration_list_no_in 	{-> New for_init.var(var, [vs.var_decl])}
+	|												{-> New for_init.empty(Null)}
+	;
+for_in_lvalue {-> for_in_lvalue}
+	=	[e]:left_hand_side_expression	{-> New for_in_lvalue.lvalue(e.exp)}
+	|	var [v]:variable_declaration_no_in 	{-> New for_in_lvalue.var(var, v.var_decl)}
+	;
+
+// note: continue,break,return,throw explicitly disallow line-breaks between the keyword and the identifier/expression
+continue_statement	{-> stmt}
+	=	continue identifier? semicolon	{-> New stmt.continue(continue, identifier.token, semicolon)}
+	;
+break_statement	{-> stmt}
+	=	break identifier? semicolon	{-> New stmt.break(break, identifier.token, semicolon)}
+	;
+return_statement	{-> stmt}
+	=	return [e]:expression? semicolon	{-> New stmt.return(return, e.exp, semicolon)}
+	;
+throw_statement	{-> stmt}
+	=	throw [e]:expression semicolon	{-> New stmt.throw(throw, e.exp, semicolon)}
+	;
+
+with_statement	{-> stmt}
+	=	with lparen [e]:expression rparen [s]:statement	{-> New stmt.with(with, lparen, e.exp, rparen, s.stmt)}
+	;
+with_statement_no_short_if	{-> stmt}
+	=	with lparen [e]:expression rparen [s]:statement_no_short_if	{-> New stmt.with(with, lparen, e.exp, rparen, s.stmt)}
+	;
+
+switch_statement	{-> stmt}
+	=	switch lparen [e]:expression rparen lbrace [cs]:case_clause* rbrace
+		{-> New stmt.switch(switch, lparen, e.exp, rparen, lbrace, [cs.switch_clause], rbrace)}
+	;
+
+case_clause	{-> switch_clause}
+	=	case [e]:expression colon [ss]:statement*	{-> New switch_clause.case(case, e.exp, colon, New block(Null, [ss.stmt]))}
+	|	default colon [ss]:statement*				{-> New switch_clause.default(default, colon, New block(Null, [ss.stmt]))}
+	;
+
+labelled_statement	{-> stmt}
+	=	identifier colon [s]:statement	{-> New stmt.labelled(identifier.token, s.stmt)}
+	;
+labelled_statement_no_short_if	{-> stmt}
+	=	identifier colon [s]:statement_no_short_if	{-> New stmt.labelled(identifier.token, s.stmt)}
+	;
+
+try_statement	{-> stmt}
+	=	try [s]:block [c]:catch_clause			{-> New stmt.try(try, s.stmt, c.catch_clause, Null)}
+	|	try [s]:block [f]:finally_clause		{-> New stmt.try(try, s.stmt, Null, f.finally_clause)}
+	|	try [s]:block [c]:catch_clause [f]:finally_clause	{-> New stmt.try(try, s.stmt, c.catch_clause, f.finally_clause)}
+	;
+
+catch_clause	{-> catch_clause}
+	=	catch lparen identifier rparen [s]:block	{-> New catch_clause(catch, lparen, identifier.token, rparen, s.stmt)}
+	;
+
+finally_clause	{-> finally_clause}
+	=	finally [s]:block	{-> New finally_clause(finally, s.stmt)}
+	;
+
+debugger_statement	{-> stmt}
+	=	debugger semicolon	{-> New stmt.debugger(debugger, semicolon)}
+	;
+
+// ----------------	FUNCTION DEFINITION -----------------
+// ECMA Chapter 13
+
+function_declaration	{-> stmt}
+	=	function identifier lparen [p]:formal_parameter_list? rparen lbrace [b]:function_body rbrace	
+		{-> New stmt.function_decl(function, identifier.token, lparen, [p.token], rparen, lbrace, b.body, rbrace)}
+	;
+
+function_expression	{-> exp}
+	=	function identifier? lparen [p]:formal_parameter_list? rparen lbrace [b]:function_body rbrace	
+		{-> New exp.function(function, identifier.token, lparen, [p.token], rparen, lbrace, b.body, rbrace)}
+	;
+
+formal_parameter_list	{-> [token]:Token*}
+	=	identifier	{-> [identifier.token]}
+	|	[p]:formal_parameter_list comma identifier	{-> [p.token, identifier.token]}
+	;
+
+function_body	{-> body}
+	=	[ss]:statement*	{-> New body(New block(Null, [ss.stmt]))}
+	;
+
+// ----------------	EXPRESSIONS -----------------
+// ECMA Chapter 11
+
+primary_expression {-> exp}
+	=	[e]:primary					{-> e.exp}
+	|	[e]:function_expression		{-> e.exp}
+	|	[e]:object_literal			{-> e.exp}
+	;
+primary_expression_stm {-> exp}
+	=	[e]:primary					{-> e.exp}
+	;
+primary {-> exp}
+	=	this							{-> New exp.this(this)}
+	|	identifier						{-> New exp.name(identifier.token)}
+	|	[e]:literal						{-> e.exp}
+	|	[e]:array_literal				{-> e.exp}
+	|	lparen [e]:expression rparen	{-> New exp.parenthesis(lparen, e.exp, rparen)}
+	;
+	
+literal	{-> exp}
+	=	string_literal	{-> New exp.const(New const.string(string_literal))}
+	|	number_literal	{-> New exp.const(New const.number(number_literal))}
+	|	regexp_literal	{-> New exp.regexp(regexp_literal)}
+	|	null			{-> New exp.const(New const.null(null))}
+	|	true			{-> New exp.const(New const.boolean(New bool.true(true)))}
+	|	false			{-> New exp.const(New const.boolean(New bool.false(false)))}
+	;
+
+array_literal	{-> exp}
+	=	lbrack [es1]:empty_comma_exp* [es2]:array_element_list? rbrack	{-> New exp.array_literal(lbrack, [es1.exp, es2.exp], rbrack)}
+	;
+array_element_list	{-> exp*}
+	=	[es]:array_element_list comma [e]:assignment_expression	{-> [es.exp, e.exp]}
+	|	[es]:array_element_list [e]:empty_comma_exp {-> [es.exp, e.exp]}
+	|	[e]:assignment_expression {-> [e.exp]}
+	;
+empty_comma_exp {-> exp}
+	=	comma {-> New exp.empty(comma)}
+	;
+
+object_literal	{-> exp}
+	=	lbrace [prtys]:property_name_and_value_list? comma? semicolon? rbrace
+		{-> New exp.object_literal(lbrace, [prtys.object_literal_property], semicolon, rbrace)}
+	;
+	
+property_name_and_value_list {-> object_literal_property*}
+	=	[prtys]:property_name_and_value_list comma [prty]:property_name_and_value	
+		{-> [prtys.object_literal_property, prty.object_literal_property]}
+	|	[prty]:property_name_and_value {-> [prty.object_literal_property]}
+	;
+	
+property_name {-> property_name}
+	=	identifier		{-> New property_name.identifier(identifier.token)}
+	|	string_literal	{-> New property_name.string(string_literal)}
+	|	number_literal	{-> New property_name.number(number_literal)}
+	;
+
+property_name_and_value	{-> object_literal_property}
+	=	[n]:property_name colon [e]:assignment_expression
+		{-> New object_literal_property.normal(n.property_name, colon, e.exp)}
+	|	get [n]:property_name lparen [p]:formal_parameter_list? rparen lbrace [body]:function_body rbrace
+		{-> New object_literal_property.get(get, n.property_name, lparen, [p.token], rparen, lbrace, body.body, rbrace)}
+	|	set [n]:property_name lparen [p]:formal_parameter_list? rparen lbrace [body]:function_body rbrace
+		{-> New object_literal_property.set(set, n.property_name, lparen, [p.token], rparen, lbrace, body.body, rbrace)}
+	;
+
+argument_list {-> exp*}
+	=	[e]:assignment_expression							{-> [e.exp]}
+	|	[es]:argument_list comma [e]:assignment_expression	{-> [es.exp, e.exp]}
+	;
+
+// Note: function_expression is in primary_expression instead of here
+member_expression {-> exp} 
+	=	[e]:primary_expression {-> e.exp}
+	|	[e]:member_expression lbrack [e2]:expression rbrack		{-> New exp.dynamic_property(e.exp, lbrack, e2.exp, rbrack)}
+	|	[e]:member_expression dot identifier					{-> New exp.property(e.exp, dot, identifier.token)}
+	|	new [e]:member_expression lparen [es]:argument_list? rparen	{-> New exp.new(new, e.exp, lparen, [es.exp], rparen)}
+	;
+member_expression_stm {-> exp} 
+	=	[e]:primary_expression_stm {-> e.exp}
+	|	[e]:member_expression_stm lbrack [e2]:expression rbrack	{-> New exp.dynamic_property(e.exp, lbrack, e2.exp, rbrack)}
+	|	[e]:member_expression_stm dot identifier				{-> New exp.property(e.exp, dot, identifier.token)}
+	|	new [e]:member_expression lparen [es]:argument_list? rparen	{-> New exp.new(new, e.exp, lparen, [es.exp], rparen)}
+	;
+
+new_expression {-> exp}
+	=	[e]:member_expression {-> e.exp}
+	|	new [e]:new_expression {-> New exp.new(new, e.exp, Null, [], Null)}
+	;
+new_expression_stm {-> exp}
+	=	[e]:member_expression_stm {-> e.exp}
+	|	new [e]:new_expression {-> New exp.new(new, e.exp, Null, [], Null)}
+	;
+
+call_expression {-> exp}
+	=	[e]:member_expression lparen [es]:argument_list? rparen	{-> New exp.invoke(e.exp, lparen, [es.exp], rparen)}
+	|	[e]:call_expression lparen [es]:argument_list? rparen	{-> New exp.invoke(e.exp, lparen, [es.exp], rparen)}
+	|	[e]:call_expression lbrack [e2]:expression rbrack	{-> New exp.dynamic_property(e.exp, lbrack, e2.exp, rbrack)}
+	|	[e]:call_expression dot identifier					{-> New exp.property(e.exp, dot, identifier.token)}
+	;
+call_expression_stm {-> exp}
+	=	[e]:member_expression_stm lparen [es]:argument_list? rparen	{-> New exp.invoke(e.exp, lparen, [es.exp], rparen)}
+	|	[e]:call_expression_stm lparen [es]:argument_list? rparen	{-> New exp.invoke(e.exp, lparen, [es.exp], rparen)}
+	|	[e]:call_expression_stm lbrack [e2]:expression rbrack	{-> New exp.dynamic_property(e.exp, lbrack, e2.exp, rbrack)}
+	|	[e]:call_expression_stm dot identifier					{-> New exp.property(e.exp, dot, identifier.token)}
+	;
+
+left_hand_side_expression {-> exp}
+	=	[e]:new_expression	{-> e.exp}
+	|	[e]:call_expression	{-> e.exp}
+	;
+left_hand_side_expression_stm {-> exp}
+	=	[e]:new_expression_stm	{-> e.exp}
+	|	[e]:call_expression_stm	{-> e.exp}
+	;
+
+postfix_expression	{-> exp}
+	=	[e]:left_hand_side_expression	{-> e.exp}
+	|	[e]:left_hand_side_expression plus_plus		{-> New exp.postfix_unop(e.exp, New postfix_unop.increment(plus_plus))}
+	|	[e]:left_hand_side_expression minus_minus	{-> New exp.postfix_unop(e.exp, New postfix_unop.decrement(minus_minus))}
+	;
+postfix_expression_stm	{-> exp}
+	=	[e]:left_hand_side_expression_stm	{-> e.exp}
+	|	[e]:left_hand_side_expression_stm plus_plus		{-> New exp.postfix_unop(e.exp, New postfix_unop.increment(plus_plus))}
+	|	[e]:left_hand_side_expression_stm minus_minus	{-> New exp.postfix_unop(e.exp, New postfix_unop.decrement(minus_minus))}
+	;
+
+unary_operator {-> prefix_unop}
+	=	delete		{-> New prefix_unop.delete(delete)}
+	|	void		{-> New prefix_unop.void(void)}
+	|	typeof		{-> New prefix_unop.typeof(typeof)}
+	|	plus		{-> New prefix_unop.plus(plus)}
+	|	minus		{-> New prefix_unop.minus(minus)}
+	|	complement	{-> New prefix_unop.complement(complement)}
+	|	not			{-> New prefix_unop.not(not)}
+	|	plus_plus	{-> New prefix_unop.increment(plus_plus)}
+	|	minus_minus {-> New prefix_unop.decrement(minus_minus)}
+	;
+unary	{-> exp}
+	=	[op]:unary_operator [e]:unary_expression 	{-> New exp.prefix_unop(op.prefix_unop, e.exp)}
+	;
+unary_expression	{-> exp}
+	=	[e]:postfix_expression	{-> e.exp}
+	|	[e]:unary				{-> e.exp}
+	;
+unary_expression_stm	{-> exp}
+	=	[e]:postfix_expression_stm	{-> e.exp}
+	|	[e]:unary					{-> e.exp}
+	;
+
+multiplicative_expression	{-> exp}
+	=	[e]:unary_expression	{-> e.exp}
+	|	[e1]:multiplicative_expression [op]:star 	[e2]:unary_expression	{-> New exp.binop(e1.exp, New binop. times(op), e2.exp)}
+	|	[e1]:multiplicative_expression [op]:slash 	[e2]:unary_expression	{-> New exp.binop(e1.exp, New binop. divide(op), e2.exp)}
+	|	[e1]:multiplicative_expression [op]:modulo 	[e2]:unary_expression	{-> New exp.binop(e1.exp, New binop. modulo(op), e2.exp)}
+	;
+multiplicative_expression_stm	{-> exp}
+	=	[e]:unary_expression_stm	{-> e.exp}
+	|	[e1]:multiplicative_expression_stm [op]:star 	[e2]:unary_expression	{-> New exp.binop(e1.exp, New binop. times(op), e2.exp)}
+	|	[e1]:multiplicative_expression_stm [op]:slash 	[e2]:unary_expression	{-> New exp.binop(e1.exp, New binop. divide(op), e2.exp)}
+	|	[e1]:multiplicative_expression_stm [op]:modulo 	[e2]:unary_expression	{-> New exp.binop(e1.exp, New binop. modulo(op), e2.exp)}
+	;
+
+additive_expression	{-> exp}
+	=	[e]:multiplicative_expression	{-> e.exp}
+	|	[e1]:additive_expression [op]:plus 	[e2]:multiplicative_expression	{-> New exp.binop(e1.exp, New binop. plus(op), e2.exp)}
+	|	[e1]:additive_expression [op]:minus [e2]:multiplicative_expression	{-> New exp.binop(e1.exp, New binop. minus(op), e2.exp)}
+	;
+additive_expression_stm	{-> exp}
+	=	[e]:multiplicative_expression_stm	{-> e.exp}
+	|	[e1]:additive_expression_stm [op]:plus 	[e2]:multiplicative_expression	{-> New exp.binop(e1.exp, New binop. plus(op), e2.exp)}
+	|	[e1]:additive_expression_stm [op]:minus [e2]:multiplicative_expression	{-> New exp.binop(e1.exp, New binop. minus(op), e2.exp)}
+	;
+
+shift	{-> exp}
+	=	[e1]:shift_expression [op]:lt_lt 	[e2]:additive_expression	{-> New exp.binop(e1.exp, New binop. shift_left(op), e2.exp)}
+	|	[e1]:shift_expression [op]:gt_gt 	[e2]:additive_expression	{-> New exp.binop(e1.exp, New binop. shift_right(op), e2.exp)}
+	|	[e1]:shift_expression [op]:gt_gt_gt [e2]:additive_expression	{-> New exp.binop(e1.exp, New binop. shift_right_unsigned(op), e2.exp)}
+	;
+	
+shift_expression	{-> exp}
+	=	[e]:additive_expression	{-> e.exp}
+	|	[e]:shift				{-> e.exp}
+	;
+shift_expression_stm	{-> exp}
+	=	[e]:additive_expression_stm	{-> e.exp}
+	|	[e1]:shift_expression_stm [op]:lt_lt 	[e2]:additive_expression	{-> New exp.binop(e1.exp, New binop. shift_left(op), e2.exp)}
+	|	[e1]:shift_expression_stm [op]:gt_gt 	[e2]:additive_expression	{-> New exp.binop(e1.exp, New binop. shift_right(op), e2.exp)}
+	|	[e1]:shift_expression_stm [op]:gt_gt_gt [e2]:additive_expression	{-> New exp.binop(e1.exp, New binop. shift_right_unsigned(op), e2.exp)}
+	;
+
+relational_expression	{-> exp}
+	=	[e]:shift_expression	{-> e.exp}
+	|	[e1]:relational_expression [op]:lt 			[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. less(op), e2.exp)}
+	|	[e1]:relational_expression [op]:gt 			[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. greater(op), e2.exp)}
+	|	[e1]:relational_expression [op]:gt_eq 		[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. greater_equal(op), e2.exp)}
+	|	[e1]:relational_expression [op]:lt_eq 		[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. less_equal(op), e2.exp)}
+	|	[e1]:relational_expression [op]:instanceof 	[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. instanceof(op), e2.exp)}
+	|	[e1]:relational_expression [op]:in 			[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. in(op), e2.exp)}
+	;
+relational_expression_no_in	{-> exp}
+	=	[e]:shift_expression	{-> e.exp}
+	|	[e1]:relational_expression_no_in [op]:lt 			[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. less(op), e2.exp)}
+	|	[e1]:relational_expression_no_in [op]:gt 			[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. greater(op), e2.exp)}
+	|	[e1]:relational_expression_no_in [op]:gt_eq 		[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. greater_equal(op), e2.exp)}
+	|	[e1]:relational_expression_no_in [op]:lt_eq 		[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. less_equal(op), e2.exp)}
+	|	[e1]:relational_expression_no_in [op]:instanceof 	[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. instanceof(op), e2.exp)}
+	;
+relational_expression_stm	{-> exp}
+	=	[e]:shift_expression_stm	{-> e.exp}
+	|	[e1]:relational_expression_stm [op]:lt 			[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. less(op), e2.exp)}
+	|	[e1]:relational_expression_stm [op]:gt 			[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. greater(op), e2.exp)}
+	|	[e1]:relational_expression_stm [op]:gt_eq 		[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. greater_equal(op), e2.exp)}
+	|	[e1]:relational_expression_stm [op]:lt_eq 		[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. less_equal(op), e2.exp)}
+	|	[e1]:relational_expression_stm [op]:instanceof 	[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. instanceof(op), e2.exp)}
+	|	[e1]:relational_expression_stm [op]:in 			[e2]:shift_expression	{-> New exp.binop(e1.exp, New binop. in(op), e2.exp)}
+	;
+
+
+equality_expression	{-> exp}
+	=	[e]:relational_expression	{-> e.exp}
+	|	[e1]:equality_expression [op]:eq_eq 	[e2]:relational_expression	{-> New exp.binop(e1.exp, New binop. equal(op), e2.exp)}
+	|	[e1]:equality_expression [op]:not_eq 	[e2]:relational_expression	{-> New exp.binop(e1.exp, New binop. not_equal(op), e2.exp)}
+	|	[e1]:equality_expression [op]:eq_eq_eq 	[e2]:relational_expression	{-> New exp.binop(e1.exp, New binop. equal_strict(op), e2.exp)}
+	|	[e1]:equality_expression [op]:not_eq_eq [e2]:relational_expression	{-> New exp.binop(e1.exp, New binop. not_equal_strict(op), e2.exp)}
+	;
+equality_expression_no_in	{-> exp}
+	=	[e]:relational_expression_no_in	{-> e.exp}
+	|	[e1]:equality_expression_no_in [op]:eq_eq 		[e2]:relational_expression_no_in {-> New exp.binop(e1.exp, New binop. equal(op), e2.exp)}
+	|	[e1]:equality_expression_no_in [op]:not_eq 		[e2]:relational_expression_no_in {-> New exp.binop(e1.exp, New binop. not_equal(op), e2.exp)}
+	|	[e1]:equality_expression_no_in [op]:eq_eq_eq  	[e2]:relational_expression_no_in {-> New exp.binop(e1.exp, New binop. equal_strict(op), e2.exp)}
+	|	[e1]:equality_expression_no_in [op]:not_eq_eq 	[e2]:relational_expression_no_in {-> New exp.binop(e1.exp, New binop. not_equal_strict(op), e2.exp)}
+	;
+equality_expression_stm	{-> exp}
+	=	[e]:relational_expression_stm	{-> e.exp}
+	|	[e1]:equality_expression_stm [op]:eq_eq 	[e2]:relational_expression	{-> New exp.binop(e1.exp, New binop. equal(op), e2.exp)}
+	|	[e1]:equality_expression_stm [op]:not_eq 	[e2]:relational_expression	{-> New exp.binop(e1.exp, New binop. not_equal(op), e2.exp)}
+	|	[e1]:equality_expression_stm [op]:eq_eq_eq 	[e2]:relational_expression	{-> New exp.binop(e1.exp, New binop. equal_strict(op), e2.exp)}
+	|	[e1]:equality_expression_stm [op]:not_eq_eq [e2]:relational_expression	{-> New exp.binop(e1.exp, New binop. not_equal_strict(op), e2.exp)}
+	;
+
+bitwise_and_expression	{-> exp}
+	=	[e]:equality_expression	{-> e.exp}
+	|	[e1]:bitwise_and_expression [op]:and [e2]:equality_expression	{-> New exp.binop(e1.exp, New binop. bitwise_and(op), e2.exp)}
+	;
+bitwise_and_expression_no_in	{-> exp}
+	=	[e]:equality_expression_no_in	{-> e.exp}
+	|	[e1]:bitwise_and_expression_no_in [op]:and [e2]:equality_expression_no_in	{-> New exp.binop(e1.exp, New binop. bitwise_and(op), e2.exp)}
+	;
+bitwise_and_expression_stm	{-> exp}
+	=	[e]:equality_expression_stm	{-> e.exp}
+	|	[e1]:bitwise_and_expression_stm [op]:and [e2]:equality_expression	{-> New exp.binop(e1.exp, New binop. bitwise_and(op), e2.exp)}
+	;
+
+bitwise_xor_expression	{-> exp}
+	=	[e]:bitwise_and_expression	{-> e.exp}
+	|	[e1]:bitwise_xor_expression [op]:xor [e2]:bitwise_and_expression	{-> New exp.binop(e1.exp, New binop. bitwise_xor(op), e2.exp)}
+	;
+bitwise_xor_expression_no_in	{-> exp}
+	=	[e]:bitwise_and_expression_no_in	{-> e.exp}
+	|	[e1]:bitwise_xor_expression_no_in [op]:xor [e2]:bitwise_and_expression_no_in	{-> New exp.binop(e1.exp, New binop. bitwise_xor(op), e2.exp)}
+	;
+bitwise_xor_expression_stm	{-> exp}
+	=	[e]:bitwise_and_expression_stm	{-> e.exp}
+	|	[e1]:bitwise_xor_expression_stm [op]:xor [e2]:bitwise_and_expression	{-> New exp.binop(e1.exp, New binop. bitwise_xor(op), e2.exp)}
+	;
+
+bitwise_or_expression	{-> exp}
+	=	[e]:bitwise_xor_expression	{-> e.exp}
+	|	[e1]:bitwise_or_expression [op]:or [e2]:bitwise_xor_expression	{-> New exp.binop(e1.exp, New binop. bitwise_or(op), e2.exp)}
+	;
+bitwise_or_expression_no_in	{-> exp}
+	=	[e]:bitwise_xor_expression_no_in	{-> e.exp}
+	|	[e1]:bitwise_or_expression_no_in [op]:or [e2]:bitwise_xor_expression_no_in	{-> New exp.binop(e1.exp, New binop. bitwise_or(op), e2.exp)}
+	;
+bitwise_or_expression_stm	{-> exp}
+	=	[e]:bitwise_xor_expression_stm	{-> e.exp}
+	|	[e1]:bitwise_or_expression_stm [op]:or [e2]:bitwise_xor_expression	{-> New exp.binop(e1.exp, New binop. bitwise_or(op), e2.exp)}
+	;
+
+logical_and_expression	{-> exp}
+	=	[e]:bitwise_or_expression	{-> e.exp}
+	|	[e1]:logical_and_expression [op]:and_and [e2]:bitwise_or_expression	{-> New exp.binop(e1.exp, New binop. logical_and(op), e2.exp)}
+	;
+logical_and_expression_no_in	{-> exp}
+	=	[e]:bitwise_or_expression_no_in	{-> e.exp}
+	|	[e1]:logical_and_expression_no_in [op]:and_and [e2]:bitwise_or_expression_no_in	{-> New exp.binop(e1.exp, New binop. logical_and(op), e2.exp)}
+	;
+logical_and_expression_stm	{-> exp}
+	=	[e]:bitwise_or_expression_stm	{-> e.exp}
+	|	[e1]:logical_and_expression_stm [op]:and_and [e2]:bitwise_or_expression		{-> New exp.binop(e1.exp, New binop. logical_and(op), e2.exp)}
+	;
+
+logical_or_expression	{-> exp}
+	=	[e]:logical_and_expression	{-> e.exp}
+	|	[e1]:logical_or_expression [op]:or_or [e2]:logical_and_expression		{-> New exp.binop(e1.exp, New binop. logical_or(op), e2.exp)}
+	;
+logical_or_expression_no_in	{-> exp}
+	=	[e]:logical_and_expression_no_in	{-> e.exp}
+	|	[e1]:logical_or_expression_no_in [op]:or_or [e2]:logical_and_expression_no_in		{-> New exp.binop(e1.exp, New binop. logical_or(op), e2.exp)}
+	;
+logical_or_expression_stm	{-> exp}
+	=	[e]:logical_and_expression_stm	{-> e.exp}
+	|	[e1]:logical_or_expression_stm [op]:or_or [e2]:logical_and_expression	{-> New exp.binop(e1.exp, New binop. logical_or(op), e2.exp)}
+	;
+
+conditional_expression	{-> exp}
+	=	[e]:logical_or_expression	{-> e.exp}
+	|	[e]:logical_or_expression question [when_true]:assignment_expression colon [when_false]:assignment_expression	
+		{-> New exp.conditional(e.exp, question, when_true.exp, colon, when_false.exp)}
+	;
+conditional_expression_no_in	{-> exp}
+	=	[e]:logical_or_expression_no_in	{-> e.exp}
+	|	[e]:logical_or_expression_no_in question [when_true]:assignment_expression colon [when_false]:assignment_expression_no_in	
+		{-> New exp.conditional(e.exp, question, when_true.exp, colon, when_false.exp)}
+	;
+conditional_expression_stm	{-> exp}
+	=	[e]:logical_or_expression_stm	{-> e.exp}
+	|	[e]:logical_or_expression_stm question [when_true]:assignment_expression colon [when_false]:assignment_expression	
+		{-> New exp.conditional(e.exp, question, when_true.exp, colon, when_false.exp)}
+	;
+
+assignment_expression	{-> exp}
+	=	[e]:conditional_expression	{-> e.exp}
+	|	[e]:left_hand_side_expression [op]:assignment_operator [e2]:assignment_expression	{-> New exp.assign(e.exp, op.assign_op, e2.exp)}
+	;
+assignment_expression_no_in	{-> exp}
+	=	[e]:conditional_expression_no_in	{-> e.exp}
+	|	[e]:left_hand_side_expression [op]:assignment_operator [e2]:assignment_expression_no_in	{-> New exp.assign(e.exp, op.assign_op, e2.exp)}
+	;
+assignment_expression_stm	{-> exp}
+	=	[e]:conditional_expression_stm	{-> e.exp}
+	|	[e]:left_hand_side_expression_stm [op]:assignment_operator [e2]:assignment_expression	{-> New exp.assign(e.exp, op.assign_op, e2.exp)}
+	;
+
+assignment_operator	{-> assign_op}
+	=	eq				{-> New assign_op.normal(eq)}
+	|	star_eq			{-> New assign_op.times(star_eq)}
+	|	slash_eq		{-> New assign_op.divide(slash_eq)}
+	|	modulo_eq		{-> New assign_op.modulo(modulo_eq)}
+	|	plus_eq			{-> New assign_op.plus(plus_eq)}
+	|	minus_eq		{-> New assign_op.minus(minus_eq)}
+	|	lt_lt_eq		{-> New assign_op.shift_left(lt_lt_eq)}
+	|	gt_gt_eq		{-> New assign_op.shift_right(gt_gt_eq)}
+	|	gt_gt_gt_eq		{-> New assign_op.shift_right_unsigned(gt_gt_gt_eq)}
+	|	and_eq			{-> New assign_op.bitwise_and(and_eq)}
+	|	xor_eq			{-> New assign_op.bitwise_xor(xor_eq)}
+	|	or_eq			{-> New assign_op.bitwise_or(or_eq)}
+	;
+
+expression	{-> exp}
+	=	[e]:assignment_expression	{-> e.exp}
+	|	[e1]:expression comma [e2]:assignment_expression	{-> New exp.comma(e1.exp, comma, e2.exp)}
+	;
+expression_no_in	{-> exp}
+	=	[e]:assignment_expression_no_in	{-> e.exp}
+	|	[e1]:expression_no_in comma [e2]:assignment_expression_no_in {-> New exp.comma(e1.exp, comma, e2.exp)}
+	;
+expression_stm	{-> exp}
+	=	[e]:assignment_expression_stm	{-> e.exp}
+	|	[e1]:expression_stm comma [e2]:assignment_expression	{-> New exp.comma(e1.exp, comma, e2.exp)}
+	;
+
+
+
+Abstract Syntax Tree
+
+body
+	=	block
+	;
+
+block
+	=	[fake_token]:Token? [statements]:stmt*
+	;
+
+stmt
+	= 	{function_decl} function [name]:Token lparen [parameters]:Token* rparen lbrace body rbrace
+	|	{exp} exp semicolon
+	|	{if} if lparen [condition]:exp rparen [then_body]:stmt else? [else_body]:stmt?
+	|	{while} while lparen [condition]:exp rparen [body]:stmt
+	|	{do} do [body]:stmt while lparen [condition]:exp rparen semicolon
+	|	{for} for lparen [init]:for_init semicolon [condition]:exp? [semicolon2]:semicolon [update]:exp? rparen [body]:stmt
+	|	{for_in} for lparen [lvalue]:for_in_lvalue in [exp]:exp rparen [body]:stmt
+	|	{block} lbrace block rbrace
+	|	{var_decl} var [decls]:var_decl+ semicolon
+	|	{empty} [semicolon]:Token
+	|	{continue} continue [label]:Token? semicolon
+	|	{break} break [label]:Token? semicolon
+	|	{return} return [value]:exp? semicolon
+	|	{throw} throw [value]:exp semicolon
+	|	{debugger} debugger semicolon
+	|	{try} try [body]:stmt.block catch_clause? finally_clause?
+	|	{switch} switch lparen exp rparen lbrace [clauses]:switch_clause+ rbrace
+	|	{with} with lparen exp rparen [body]:stmt
+	|	{labelled} [label]:Token stmt
+	;
+	
+for_init
+	=	{exp} exp
+	|	{var} var var_decl+ 
+	|	{empty} [fake_token]:Token?
+	;
+for_in_lvalue
+	=	{lvalue} exp
+	|	{var} var var_decl
+	;
+
+catch_clause
+	=	catch lparen [name]:Token rparen [body]:stmt.block
+	;
+
+finally_clause
+	=	finally [body]:stmt.block
+	;
+
+switch_clause
+	=	{case} case exp colon block
+	|	{default} default colon block
+	;
+
+var_decl
+	=	[name]:Token eq? [init]:exp?
+	;
+	
+bool
+	=	{true} [token]:Token
+	|	{false} [token]:Token
+	;
+
+const
+	=	{string} string_literal
+	|	{number} number_literal
+	|	{boolean} bool
+	|	{null} [token]:Token
+	;
+
+exp
+	=	{const} const
+	|	{this} this
+	|	{regexp} regexp_literal
+	|	{function} function [name]:Token? lparen [parameters]:Token* rparen lbrace body rbrace
+	|	{object_literal} lbrace [properties]:object_literal_property* [fake_semicolon]:semicolon? rbrace
+	|	{array_literal} lbrack [values]:exp* rbrack
+	|	{parenthesis} lparen exp rparen
+	|	{new} new [function_exp]:exp lparen? [arguments]:exp* rparen?
+	|	{invoke} [function_exp]:exp lparen [arguments]:exp* rparen
+	|	{prefix_unop} [op]:prefix_unop exp
+	|	{postfix_unop} exp [op]:postfix_unop
+	|	{binop}	[left]:exp [op]:binop [right]:exp
+	|	{assign} [left]:exp [op]:assign_op [right]:exp
+	|	{conditional} [condition]:exp question [true_exp]:exp colon [false_exp]:exp
+	|	{comma} [first_exp]:exp comma [second_exp]:exp 
+	|	{name} [name]:Token
+	|	{property} [base]:exp dot [name]:Token
+	|	{dynamic_property} [base]:exp lbrack [property_exp]:exp rbrack
+	|	{empty} comma 	// appears in array initializers
+	;
+	
+object_literal_property
+	=	{normal} [name]:property_name colon [value]:exp
+	|	{get} get [name]:property_name lparen [parameters]:Token* rparen lbrace body rbrace
+	|	{set} set [name]:property_name lparen [parameters]:Token* rparen lbrace body rbrace
+	;
+	
+property_name
+	=	{identifier} [name]:Token
+	|	{string} string_literal
+	|	{number} number_literal
+	;
+
+postfix_unop
+	=	{increment} plus_plus
+	|	{decrement} minus_minus
+	;
+
+prefix_unop
+	=	{delete} delete
+	|	{void} void
+	|	{typeof} typeof
+	|	{plus} plus
+	|	{minus} minus
+	|	{complement} complement
+	|	{not} not
+	|	{increment} plus_plus
+	|	{decrement} minus_minus
+	;
+
+binop
+	=	{plus} plus
+	|	{minus} minus
+	|	{times} star
+	|	{divide} slash
+	|	{modulo} modulo
+	|	{shift_left} lt_lt
+	|	{shift_right} gt_gt
+	|	{shift_right_unsigned} gt_gt_gt
+	|	{less} lt
+	|	{greater} gt
+	|	{less_equal} lt_eq
+	|	{greater_equal} gt_eq
+	|	{instanceof} instanceof
+	|	{in} in
+	|	{equal} eq_eq
+	|	{equal_strict} eq_eq_eq
+	|	{not_equal} not_eq
+	|	{not_equal_strict} not_eq_eq
+	|	{bitwise_and} and
+	|	{bitwise_or} or
+	|	{bitwise_xor} xor
+	|	{logical_and} and_and
+	|	{logical_or} or_or
+	;
+
+assign_op
+	=	{normal} eq
+	|	{plus} plus_eq
+	|	{minus} minus_eq
+	|	{times} star_eq
+	|	{divide} slash_eq
+	|	{modulo} modulo_eq
+	|	{shift_left} lt_lt_eq
+	|	{shift_right} gt_gt_eq
+	|	{shift_right_unsigned} gt_gt_gt_eq
+	|	{bitwise_and} and_eq
+	|	{bitwise_or} or_eq
+	|	{bitwise_xor} xor_eq
+	;
+
+
+

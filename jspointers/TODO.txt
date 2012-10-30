@@ -1,0 +1,22 @@
+
+CORE FEATURES
+
+Detect use of eval and the Function constructor. We can't handle it, but we can detect it.
+
+Implement StoreIfPresent's transfer function properly. Right now it works like Store, which is less precise
+than it could be (but is sound).
+
+PRAGMATIC STUFF
+
+Look into non-standard features, such as the __proto__ property being accessible directly, and add support for these.
+Preliminary list:
+	__proto__
+	substr 
+
+DOM Modeling:
+
+"Element" is used in TAJS/test/10k/10k_snake.html, but the analysis does not know it.
+
+ECMA 5
+
+- get/set properties in object literals.

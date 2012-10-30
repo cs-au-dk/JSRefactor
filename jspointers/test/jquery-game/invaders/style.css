@@ -1,0 +1,12 @@
+      body { background-color: #000; font-size:12px; font-family:Tahoma,Arial,Helvetica,Sans-serif; }
+      #playground { margin:auto; background-image: url(city3.jpg); background-position:bottom; -moz-border-radius: 5px; -webkit-border-radius: 5px; }
+      #welcome,#pause { text-align:center; color: #0F9; font-size:18px; font-weight:bold; padding-top: 200px; }
+      #level { position: absolute; width: 90px; text-align: left; top:0; left: 725px; font-size: 14px; color: red; }
+      #console { width:800px; color: #FFF; background-color:#000; font:"Arial Black", Gadget, sans-serif; font-size:12px; font-weight: bold; margin:10px auto 0 auto; overflow:auto; }
+      #Missile { width:10px; height:10px; background:red; -moz-border-radius: 5px; -webkit-border-radius: 5px; }
+      #shield { -moz-border-radius: 30px; -webkit-border-radius: 30px; }
+      #stat {  width: 400px; float: left; }
+      #desc { width: 400px; float: left;}
+      .Missile { width:2px; height:5px; }
+      .jet { height: 15px; width: 60px; background-image: url(jet.png); background-repeat: no-repeat; }
+      .player {  }

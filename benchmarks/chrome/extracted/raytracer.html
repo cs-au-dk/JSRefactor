@@ -1,0 +1,1483 @@
+<html>
+<head>
+<script type="text/javascript">
+/******************************
+ * Simple Javascript Raytracer example,
+ * 2008/10/20 - mark.webster@gmail.com
+ * Feel free to do whatever you want with this source.
+ */
+
+/************
+ * Vars
+ */
+        ;
+        var Vars = (function() {
+            function getl(id) { return document.getElementById(id); }
+            function checked(id) { return getl(id).checked; }
+            var fov = 70;                                                // field of view
+            var fovy;
+            var eyez = -20;                                                // eye position in relation to viewplane
+            var vw,vh;                                                        // viewplane width/height (viewplane is z=0)
+            var amb  = 0.15;                                        // ambient lighting
+            var maxlevel = 20;                                        // maximum number of reflection recursions
+            var eyez2=eyez*eyez;
+            var rdn = 3.1415926535897932384626433832/180;
+            var antialias = false;                                // true = SLOOOOOOOOOOOOOOOOOOOOW!
+            var bilinear = true;
+            var cam        = {x:-85, y:90, z:-260};        // camera position
+            var look={x:-11, y:0, z:-50};                // look at point
+            var up        ={x:0, y:1, z:0        };                        // up vector
+            var viewmat = [ {x:1,y:0,z:0},                // the above 3 vectors will be normalised
+                                            {x:0,y:1,z:0},                // and cross-produced into this matrix
+                                            {x:0,y:0,z:1},
+                                            {x:0,y:0,z:0}];
+            var wid, hei;                                                // canvas width/height
+            var wh, hh, ivw, ivh;
+            var canv, ctx=false, imgdata=false, pix;
+            var toggle=0;
+            var show = false;
+            var sp = new Array();
+            var numsp = 0;
+            var cy = new Array();
+            var numcy = 0;
+            var pl = new Array();
+            var numpl = 0;
+            var li = new Array();
+            var numli = 0;
+            var ob = new Array();
+            var numob = 0;
+            var framenum = 0;
+            var textures = new Object();
+            var texturewaiting = 0;
+            var ix,iy,iz,        // incident (intersection) vector position
+                    idoti,                // incident dot incident
+                    iobj,                // last ray intersected object
+                    icyl,ndir,        // length along cylinder axis, and incident normal direction
+                    nx,ny,nz,        // normal at incident
+                    ez,                        // vector to eye at incident (0-ix, 0-iy, eyez-iz)
+                    lx,ly,lz,        // vector from incident to current light
+                    ldotl,idotl,// light-dot-light, incident-dot-light
+                    cr,cg,cb;        // ray's accumulated colour (will be pixel)
+            var xy;                        // pointer to current pixel in buffer
+            var r = {ox:0, oy:0, oz:0, dx:0, dy:0, dz:0, odotd:0, odoto:0, ddotd:0};
+            var mt,mo,mndir        // closest dist, object, and normal direction;
+            ;
+            return {
+                getl: getl,
+                fov: fov,
+                fovy: fovy,
+                eyez: eyez,
+                vw: vw,
+                vh: vh,
+                amb: amb,
+                maxlevel: maxlevel,
+                eyez2: eyez2,
+                rdn: rdn,
+                antialias: antialias,
+                bilinear: bilinear,
+                cam: cam,
+                look: look,
+                up: up,
+                viewmat: viewmat,
+                wid: wid,
+                hei: hei,
+                wh: wh,
+                hh: hh,
+                ivw: ivw,
+                ivh: ivh,
+                canv: canv,
+                ctx: ctx,
+                imgdata: imgdata,
+                pix: pix,
+                toggle: toggle,
+                show: show,
+                sp: sp,
+                numsp: numsp,
+                cy: cy,
+                numcy: numcy,
+                pl: pl,
+                numpl: numpl,
+                li: li,
+                numli: numli,
+                ob: ob,
+                numob: numob,
+                framenum: framenum,
+                textures: textures,
+                texturewaiting: texturewaiting,
+                ix: ix,
+                iy: iy,
+                iz: iz,
+                idoti: idoti,
+                iobj: iobj,
+                icyl: icyl,
+                ndir: ndir,
+                nx: nx,
+                ny: ny,
+                nz: nz,
+                ez: ez,
+                lx: lx,
+                ly: ly,
+                lz: lz,
+                ldotl: ldotl,
+                idotl: idotl,
+                cr: cr,
+                cg: cg,
+                cb: cb,
+                xy: xy,
+                r: r,
+                mt: mt,
+                mo: mo,
+                mndir: mndir
+            };
+        })();
+        var Primitives = (function() {
+                function sphere(x,y,z,r, cr,cg,cb, d,p,pp,rf) {
+                        Vars.sp[Vars.numsp] = new Object();
+                        var s = Vars.sp[Vars.numsp];
+                        s.x =x;  s.y =y;  s.z =z;   s.r=r;
+                        s.cr=cr; s.cg=cg; s.cb=cb;
+                        s.d =d;  s.p =p;  s.pp=pp;        s.rf=rf;
+
+                        s.precalc = function() {
+                                this.ir = 1/this.r;
+                                this.c = this.x*this.x + this.y*this.y + this.z*this.z - this.r*this.r;
+                        };
+                        s.sethalf = function(nx,ny,nz, cr,cg,cb, d,p,pp,rf) {
+                                // Set hemisphere, normal points in direction of open half.
+                                // Inside has different material properties.
+                                this.nx=nx;        this.ny=ny;        this.nz=nz;
+                                this.inside = {
+                                        x:this.x,        y:this.y,        z:this.z,        r:this.r,
+                                        nx:nx, ny:ny, nz:nz,
+                                        obj:this.obj+'inside', parent:this,
+                                        cr:cr, cg:cg, cb:cb, d:d, p:p, pp:pp, rf:rf,
+                                        precalc:this.precalc, setuv:this.setuv, getuv:this.getuv,
+                                        setbitmap:this.setbitmap, texture:function(){} };
+                                return this.inside;
+                        }
+                        s.setuv = function(ux,uy,uz, vx,vy,vz, uo,vo, texturefunc) {
+                                var l,v,wx,wy,wz;
+                                this.ocr=this.cr;        this.ocg=this.cg;        this.ocb=this.cb;
+                                this.ul = l = Math.sqrt(ux*ux+uy*uy+uz*uz);        ux/=l;        uy/=l;        uz/=l;
+                                this.vl = l = Math.sqrt(vx*vx+vy*vy+vz*vz);        vx/=l;        vy/=l;        vz/=l;
+
+        /*                        if (this.nx!=undefined) {
+                                // if half-sphere, then attempt to align uv axes with the axis (nx,ny,nz)
+                                v = vx*this.nx + vy*this.ny + vz*this.nz;
+                                wx=uy*vz-uz*vy;        wy=uz*vx-ux*vz;        wz=ux*vy-uy*vx;
+                                vx = this.nx*v;                        vy = this.ny*v;                        vz = this.nz*v;
+                                ux = vy*wz-vz*wy;                uy = vz*wx-vx*wz;                uz = vx*wy-vy*wx;
+                                alert(hun(ux)+","+hun(uy)+","+hun(uz)+" || "+hun(vx)+","+hun(vy)+","+hun(vz));
+                        }*/
+                                this.wx=uy*vz-uz*vy;        this.wy=uz*vx-ux*vz;        this.wz=ux*vy-uy*vx;
+
+                                this.ux=ux;        this.uy=uy;        this.uz=uz;        this.vx=vx;        this.vy=vy;        this.vz=vz;
+                                this.uo=uo;        this.vo=vo;        this.texture = texturefunc;
+                                return this;
+                        }
+                        s.setbitmap = function(imgurl) { Texture.setbitmap(this, imgurl); return this; }
+                        s.texture = function(){};
+
+                        s.hit = sp_hit;
+                        s.intersect = sp_intersect;
+                        s.li_intersect = sp_li_intersect;
+                        s.getuv = function() {
+                                var x,y,z,u,v,r;
+                                x = Vars.ix-this.x;        y = Vars.iy-this.y;        z = Vars.iz-this.z;
+                                v = Math.acos(-(x*this.vx+y*this.vy+z*this.vz)*this.ir);
+                                u = (x*this.ux+y*this.uy+z*this.uz)/(this.r*Math.sin(v));
+                                this.u = this.uo + Math.acos(u)/6.2831853072;
+                                this.v = this.vo + v/3.1415926536;
+                                if ((x*this.wx+y*this.wy+z*this.wz)<0) this.u=1-this.u;
+                                this.u *= this.ul;
+                                this.v *= this.vl;
+                        }
+
+                        s.precalc();
+                        s.obj = Vars.numob;
+                        Vars.ob[Vars.numob++] = s;
+                        Vars.numsp++;
+                        return s;
+                }
+                function sp_intersect() {
+                        var self, b,b2,c,d, t;
+                        self=(this.obj==Vars.iobj);
+                        // Convex object can't reflect itself on the outside
+                        if (self && (this.nx==undefined || Vars.ndir>0)) return;
+
+                        b = this.x*Vars.r.dx + this.y*Vars.r.dy + this.z*Vars.r.dz - Vars.r.odotd;
+                        b2= b*b;
+                        c = Vars.r.odoto - 2*(this.x*Vars.r.ox + this.y*Vars.r.oy + this.z*Vars.r.oz) + this.c;
+                        d = b2 - Vars.r.ddotd*c;
+                        if (d<0) return;
+                        if (this.nx==undefined) {                // Closed sphere
+                                if (b<0) {
+                                        if (b2>d) return;                // both roots <0
+                                        t=(b+Math.sqrt(d))/Vars.r.ddotd;
+                                } else {
+                                        if (b2>d) t=(b-Math.sqrt(d))/Vars.r.ddotd; else t=(b+Math.sqrt(d))/Vars.r.ddotd;
+                                }
+                                if (t>0 && t<Vars.mt) { Vars.mt=t; Vars.mo=this.obj; Vars.mndir=1; }
+                                return;
+                        }
+                        // Open sphere
+                        d = Math.sqrt(d);
+                        // Try near first if not testing self
+                        if (!self) {
+                                t = (b-d)/Vars.r.ddotd;
+                                if (t>0 && t<Vars.mt) {
+                                        if (((Vars.r.ox+Vars.r.dx*t-this.x)*this.nx + (Vars.r.oy+Vars.r.dy*t-this.y)*this.ny + (Vars.r.oz+Vars.r.dz*t-this.z)*this.nz)<=0) {
+                                                Vars.mt=t; Vars.mo=this.obj; Vars.mndir=(b>0)?1:-1;
+                                                return;
+                                        }
+                                }
+                        }
+                        // Now try far
+                        t = (b+d)/Vars.r.ddotd;
+                        if (t<=0 || t>Vars.mt) return;
+                        if (((Vars.r.ox+Vars.r.dx*t-this.x)*this.nx + (Vars.r.oy+Vars.r.dy*t-this.y)*this.ny + (Vars.r.oz+Vars.r.dz*t-this.z)*this.nz)>0) return;
+                        Vars.mt=t; Vars.mo=this.obj; Vars.mndir=-1;
+                }
+                function sp_hit() {
+                        // incident point
+                        Vars.ix = Vars.r.ox + Vars.r.dx*Vars.mt;
+                        Vars.iy = Vars.r.oy + Vars.r.dy*Vars.mt;
+                        Vars.iz = Vars.r.oz + Vars.r.dz*Vars.mt;
+                        // normal
+                        Vars.nx = Vars.ndir*(Vars.ix - this.x)*this.ir;
+                        Vars.ny = Vars.ndir*(Vars.iy - this.y)*this.ir;
+                        Vars.nz = Vars.ndir*(Vars.iz - this.z)*this.ir;
+                }
+                function sp_li_intersect() {
+                        var self,t, b,b2,c,d;
+                        self=(this.obj==Vars.iobj);
+                        // Convex object can't shadow itself on the outside
+                        if (self && (this.nx==undefined || Vars.ndir>=0)) return false;
+
+                        b = this.x*Vars.lx + this.y*Vars.ly + this.z*Vars.lz - Vars.idotl;        b2 = b*b;
+                        c = Vars.idoti - 2*(this.x*Vars.ix + this.y*Vars.iy + this.z*Vars.iz) + this.c;
+                        d = b2 - Vars.ldotl*c;
+                        if (d<0) return false;
+                        if (this.nx==undefined) {                        // Closed sphere
+                                if (b<0) {
+                                        if (b2>d) return;                        // both roots <0
+                                        t = (b+Math.sqrt(d)) / Vars.ldotl;
+                                } else {
+                                        if (b2>d) t = (b-Math.sqrt(d)) / Vars.ldotl;
+                                                else t = (b+Math.sqrt(d)) / Vars.ldotl;
+                                }
+                                return (t>=0 && t<=1);
+                        }
+                        // Open sphere
+                        d = Math.sqrt(d);
+                        t = (b+d) / Vars.ldotl;
+                        if (t>=0 && t<=1) {
+                                c = (Vars.ix+Vars.lx*t-this.x)*this.nx + (Vars.iy+Vars.ly*t-this.y)*this.ny + (Vars.iz+Vars.lz*t-this.z)*this.nz;
+                                if (c<=0) return true;
+                        }
+                        if (self) return false;
+                        t = (b-d) / Vars.ldotl;
+                        if (t<0 || t>1) return false;
+                        c = (Vars.ix+Vars.lx*t-this.x)*this.nx + (Vars.iy+Vars.ly*t-this.y)*this.ny + (Vars.iz+Vars.lz*t-this.z)*this.nz;
+                        return (c<=0);
+                }
+                function cylinder(x,y,z, x1,y1,z1, r, cr,cg,cb, d,p,pp,rf) {
+                        var c = Vars.cy[Vars.numcy] = new Object();
+                        c.x =x;  c.y =y;  c.z =z;   c.r=r;
+                        c.x1=x1; c.y1=y1; c.z1=z1;
+                        c.cr=cr; c.cg=cg; c.cb=cb;
+                        c.d =d;  c.p =p;  c.pp=pp;        c.rf=rf;
+
+                        c.precalc = function() {
+                                this.r2 = this.r*this.r;
+                                this.ir = 1/this.r;
+                                this.ir2 = 1/this.r2;
+                                // we don't normalise, because we're using the normal as the axis & length
+                                this.nx        = this.x1 - this.x;
+                                this.ny = this.y1 - this.y;
+                                this.nz = this.z1 - this.z;
+                                this.len2= this.nx*this.nx + this.ny*this.ny + this.nz*this.nz;
+                                this.ilen2=1/this.len2;
+                                this.c = this.len2 * this.r2;
+                                this.len= Math.sqrt(this.len2);
+                        };
+                        c.setinside = function(cr,cg,cb, d,p,pp,rf) {
+                                // Inside can have different material properties
+                                this.inside = {
+                                        x:this.x, y:this.y, z:this.z,        x1:this.x1, y1:this.y1, z1:this.z1,
+                                        r:this.r, cr:cr, cg:cg, cb:cb, d:d, p:p, pp:pp, rf:rf,
+                                        obj:this.obj+'inside', parent:this, precalc:this.precalc, texture:function(){},
+                                        setbitmap:this.setbitmap, setuv:this.setuv,        getuv:this.getuv};
+                                return this.inside;
+                        }
+                        c.setuv = function(ux,uy,uz, vx,vy,vz, uo,vo, texturefunc) {
+                                var l;
+                                this.ocr=this.cr;        this.ocg=this.cg;        this.ocb=this.cb;
+                                this.ul = l = Math.sqrt(ux*ux+uy*uy+uz*uz);        ux/=l;        uy/=l;        uz/=l;
+                                this.vl = l = Math.sqrt(vx*vx+vy*vy+vz*vz);        vx/=l;        vy/=l;        vz/=l;
+                                this.ux=ux;        this.uy=uy;        this.uz=uz;        this.vx=vx;        this.vy=vy;        this.vz=vz;
+                                this.wx=uy*vz-uz*vy;        this.wy=uz*vx-ux*vz;        this.wz=ux*vy-uy*vx;
+                                this.uo=uo;        this.vo=vo;        this.texture = texturefunc;
+                                return this;
+                        }
+                        c.setbitmap = function(imgurl) { Texture.setbitmap(this, imgurl); return this; }
+                        c.texture = function(){};
+
+                        c.hit = cy_hit;
+                        c.intersect = cy_intersect;
+                        c.li_intersect = cy_li_intersect;
+                        c.getuv = function() {
+                                var x,y,z,cx,cy,cz;
+                                cx=this.x+this.nx*Vars.icyl;        cy=this.y+this.ny*Vars.icyl;        cz=this.z+this.nz*Vars.icyl;
+                                x=Vars.ix-cx;        y=Vars.iy-cy;        z=Vars.iz-cz;
+                                this.u = Math.acos((x*this.ux+y*this.uy+z*this.uz)*this.ir)/6.2831853072;
+                                if ((x*this.wx+y*this.wy+z*this.wz)<0) this.u=1-this.u;
+                                this.u = (this.u+this.uo) * this.ul;
+                                this.v = (1-Vars.icyl-this.vo) * this.vl;
+                        }
+
+                        c.precalc();
+                        c.obj = Vars.numob;
+                        Vars.ob[Vars.numob++] = c;
+                        Vars.numcy++;
+                        return c;
+                }
+                function cy_intersect() {
+                        var self,t, a,b,b2,c,d, px,py,pz, onx,ony,onz, dnx,dny,dnz, cix,ciy,ciz;
+                        self=(this.obj==Vars.iobj);
+                        if (self && Vars.ndir>=0) return;        // Convex object can't reflect itself on the outside
+
+                        px  = this.x - Vars.r.ox;                                py  = this.y - Vars.r.oy;                                pz  = this.z - Vars.r.oz;
+                        onx = py*this.nz - pz*this.ny;                ony = pz*this.nx - px*this.nz;                onz = px*this.ny - py*this.nx;
+                        dnx = Vars.r.dy*this.nz - Vars.r.dz*this.ny;        dny = Vars.r.dz*this.nx - Vars.r.dx*this.nz;        dnz = Vars.r.dx*this.ny - Vars.r.dy*this.nx;
+                        a   = dnx*dnx + dny*dny + dnz*dnz;        b   = onx*dnx + ony*dny + onz*dnz;        b2  = b*b;
+                        d   = b2 - (onx*onx + ony*ony + onz*onz - this.c)*a;
+                        if (d<0) return;
+                        if (b<0 || self) {                                // If testing self, test only for far intersect
+                                t = (b+Math.sqrt(d))/a;
+                                if (t<0 || t>Vars.mt) return;        // Intersection behind incident or beyond current nearest
+                                cix= Vars.r.ox + Vars.r.dx*t;        ciy = Vars.r.oy + Vars.r.dy*t;        ciz = Vars.r.oz + Vars.r.dz*t;
+                                px = cix - this.x;        py  = ciy - this.y;                pz  = ciz - this.z;
+                                c  = (px*this.nx + py*this.ny + pz*this.nz) * this.ilen2;
+                                if (c<0 || c>1) return;
+                                Vars.mndir = -1;
+                        } else {
+                                d = Math.sqrt(d);
+                                t = (b-d)/a;
+                                if (t>Vars.mt) return;
+                                if (t>=0) {        // Closer intersection
+                                        cix= Vars.r.ox + Vars.r.dx*t;        ciy = Vars.r.oy + Vars.r.dy*t;        ciz = Vars.r.oz + Vars.r.dz*t;
+                                        px = cix - this.x;        py  = ciy - this.y;                pz  = ciz - this.z;
+                                        c  = (px*this.nx + py*this.ny + pz*this.nz) * this.ilen2;
+                                        if (c>=0 && c<=1) Vars.mndir=1; else t=-1;
+                                }
+                                if (t<0) {
+                                        t = (b+d)/a;
+                                        if (t>Vars.mt) return;
+                                        cix= Vars.r.ox + Vars.r.dx*t;        ciy = Vars.r.oy + Vars.r.dy*t;        ciz = Vars.r.oz + Vars.r.dz*t;
+                                        px = cix - this.x;        py  = ciy - this.y;                pz  = ciz - this.z;
+                                        c  = (px*this.nx + py*this.ny + pz*this.nz) * this.ilen2;
+                                        if (c<0 || c>1) return;
+                                        Vars.mndir =-1;
+                                }
+                        }
+
+                        Vars.ix=cix;        Vars.iy=ciy;        Vars.iz=ciz;
+                        Vars.icyl = c;                Vars.mt=t;
+                        Vars.mo=this.obj;        Vars.mndir *= this.ir;
+                }
+                function cy_hit() {
+                        Vars.nx = Vars.ndir * (Vars.ix - (this.x + this.nx*Vars.icyl));
+                        Vars.ny = Vars.ndir * (Vars.iy - (this.y + this.ny*Vars.icyl));
+                        Vars.nz = Vars.ndir * (Vars.iz - (this.z + this.nz*Vars.icyl));
+                }
+                function cy_li_intersect() {
+                        var t,self, px,py,pz, onx,ony,onz, dnx,dny,dnz, a,b,b2,c,d;
+                        self=(this.obj==Vars.iobj);
+                        if (self && Vars.ndir>=0) return false;        // Convex object can't shadow itself on the outside
+                        px  = this.x - Vars.ix;                                py  = this.y - Vars.iy;                                pz  = this.z - Vars.iz;
+                        onx = py*this.nz - pz*this.ny;        ony = pz*this.nx - px*this.nz;        onz = px*this.ny - py*this.nx;
+                        dnx = Vars.ly*this.nz - Vars.lz*this.ny;        dny = Vars.lz*this.nx - Vars.lx*this.nz;        dnz = Vars.lx*this.ny - Vars.ly*this.nx;
+                        a   = dnx*dnx+dny*dny+dnz*dnz;        b   = onx*dnx+ony*dny+onz*dnz;        b2  = b*b;
+                        d   = b2 - (onx*onx + ony*ony + onz*onz - this.c)*a;
+                        if (d<0) return false;
+                        if (b<0 || self) {                                        // If testing self, test only for far intersect
+                                t = (b+Math.sqrt(d)) / a;
+                                if (t<0 || t>1) return false;        // Intersection behind incident or beyond light
+                                cix = Vars.ix + Vars.lx*t;        ciy = Vars.iy + Vars.ly*t;        ciz = Vars.iz+Vars.lz*t;
+                                px  = cix - this.x;        py  = ciy - this.y;        pz  = ciz - this.z;
+                                c   = (px*this.nx + py*this.ny + pz*this.nz) * this.ilen2;
+                                return (c>=0 && c<=1);
+                        }
+                        d = Math.sqrt(d);
+                        t = (b-d)/a;
+                        if (t>1) return false;
+                        if (t>=0) {        // Closer intersection
+                                cix = Vars.ix + Vars.lx*t;        ciy = Vars.iy + Vars.ly*t;        ciz = Vars.iz+Vars.lz*t;
+                                px  = cix - this.x;        py  = ciy - this.y;        pz  = ciz - this.z;
+                                c   = (px*this.nx + py*this.ny + pz*this.nz) * this.ilen2;
+                                if (c>=0 && c<=1) return true;
+                        }
+                        t = (b+d)/a;
+                        if (t>1) return false;
+                        cix = Vars.ix + Vars.lx*t;        ciy = Vars.iy + Vars.ly*t;        ciz = Vars.iz+Vars.lz*t;
+                        px  = cix - this.x;        py  = ciy - this.y;        pz  = ciz - this.z;
+                        c   = (px*this.nx + py*this.ny + pz*this.nz) * this.ilen2;
+                        return (c>=0 && c<=1);
+                }
+                function plane(x0,y0,z0, x1,y1,z1, x2,y2,z2, cr,cg,cb, d,ph,pp,rf) {
+                        Vars.pl[Vars.numpl] = new Object();
+                        var p = Vars.pl[Vars.numpl];
+                        var nx,ny,nz,l;
+
+                        p.x=x0;                p.y=y0;                p.z=z0;
+                        p.ux=x1-x0;        p.uy=y1-y0;        p.uz=z1-z0;
+                        p.vx=x2-x0;        p.vy=y2-y0;        p.vz=z2-z0;
+                        p.cr=cr;        p.cg=cg;        p.cb=cb;        p.d=d;
+                        p.p=ph;                p.pp=pp;        p.rf=rf;
+                        // cross product to find normal
+                        p.nx=p.uy*p.vz - p.uz*p.vy;
+                        p.ny=p.uz*p.vx - p.ux*p.vz;
+                        p.nz=p.ux*p.vy - p.uy*p.vx;
+                        // normalise normal
+                        l = Math.sqrt(p.nx*p.nx + p.ny*p.ny + p.nz*p.nz);
+                        p.nx/=l;        p.ny/=l;        p.nz/=l;
+
+                        p.precalc = function() {
+                                // find D
+                                this.D = this.nx*this.x + this.ny*this.y + this.nz*this.z;
+                                this.ul2 = this.ux*this.ux + this.uy*this.uy + this.uz*this.uz;
+                                this.vl2 = this.vx*this.vx + this.vy*this.vy + this.vz*this.vz;
+                        };
+                        p.setuv = function(ux,uy,uz, vx,vy,vz, uo,vo, texturefunc) {
+                                this.ocr=this.cr;        this.ocg=this.cg;        this.ocb=this.cb;
+                                this.ux=ux;        this.uy=uy;        this.uz=uz;        this.vx=vx;        this.vy=vy;        this.vz=vz;
+                                this.uo=uo;        this.vo=vo;        this.texture = texturefunc;
+                                return this;
+                        }
+                        p.setbitmap = function(imgurl) { Texture.setbitmap(this, imgurl); return this; }
+                        p.texture = function(){};
+
+                        p.hit = pl_hit;
+                        p.intersect = pl_intersect;
+                        p.li_intersect = pl_li_intersect;
+                        p.getuv = function() {
+                                var dx,dy,dz;
+                                dx= Vars.ix-this.x;        dy= Vars.iy-this.y;        dz= Vars.iz-this.z;
+                                this.u = this.uo + (dx*this.ux + dy*this.uy + dz*this.uz)/this.ul2;
+                                this.v = 1 - this.vo - (dx*this.vx + dy*this.vy + dz*this.vz)/this.vl2;
+                        }
+
+                        p.precalc();
+                        p.obj = Vars.numob;
+                        Vars.ob[Vars.numob++] = Vars.pl[Vars.numpl];
+                        Vars.numpl++;
+                        return p;
+                }
+                function pl_intersect() {
+                        var t,dx,dy,dz,u,v,ix,iy,iz;
+                        if (this.obj==Vars.iobj) return;
+                        t = (this.D - this.nx*Vars.r.ox - this.ny*Vars.r.oy - this.nz*Vars.r.oz) /
+                                (this.nx*Vars.r.dx + this.ny*Vars.r.dy + this.nz*Vars.r.dz);
+                        if (t<=0 || t>=Vars.mt) return;
+/*
+                        // incident point
+                        ix = r.ox + r.dx*t;
+                        iy = r.oy + r.dy*t;
+                        iz = r.oz + r.dz*t;
+                        dx= ix-this.x;        dy= iy-this.y;        dz= iz-this.z;
+                        u = dx*this.ux + dy*this.uy + dz*this.uz;
+                        if (u<0 || u>this.ul2) return;
+                        v = dx*this.vx + dy*this.vy + dz*this.vz;
+                        if (v<0 || v>this.vl2 || (u/this.ul2+v/this.vl2)>1) return;
+        */
+                        Vars.mt=t; Vars.mo=this.obj;        Vars.mndir=1;
+                }
+                function pl_hit() {
+                        // incident point
+                        Vars.ix = Vars.r.ox + Vars.r.dx*Vars.mt;
+                        Vars.iy = Vars.r.oy + Vars.r.dy*Vars.mt;
+                        Vars.iz = Vars.r.oz + Vars.r.dz*Vars.mt;
+                        // normal
+                        Vars.nx = this.nx;
+                        Vars.ny = this.ny;
+                        Vars.nz = this.nz;
+                }
+                function pl_li_intersect() {
+                        if (this.obj==Vars.iobj) return false;
+                        var t;
+                        t = (this.D - this.nx*Vars.ix - this.ny*Vars.iy - this.nz*Vars.iz) / (this.nx*Vars.lx + this.ny*Vars.ly + this.nz*Vars.lz);
+                        return (t>0 && t<1);
+                }
+                function disc(x,y,z, nx,ny,nz, r, cr,cg,cb, d,ph,pp,rf) {
+                        Vars.pl[Vars.numpl] = new Object();
+                        var p = Vars.pl[Vars.numpl];
+
+                        p.x =x;                p.y =y;                p.z =z;
+                        p.cr=cr;        p.cg=cg;        p.cb=cb;        p.d=d;
+                        p.p=ph;                p.pp=pp;        p.rf=rf;
+                        l = Math.sqrt(nx*nx + ny*ny + nz*nz);
+                        p.nx=nx/l;        p.ny=ny/l;        p.nz=nz/l;
+
+                        p.precalc = function() {
+                                this.r2=r*r;
+                                this.D = this.nx*this.x + this.ny*this.y + this.nz*this.z;
+                                this.ul2 = this.ux*this.ux + this.uy*this.uy + this.uz*this.uz;
+                                this.vl2 = this.vx*this.vx + this.vy*this.vy + this.vz*this.vz;
+                        };
+                        p.setuv = function(ux,uy,uz, vx,vy,vz, uo,vo, texturefunc) {
+                                this.ocr=this.cr;        this.ocg=this.cg;        this.ocb=this.cb;
+                                this.ux=ux;        this.uy=uy;        this.uz=uz;        this.vx=vx;        this.vy=vy;        this.vz=vz;
+                                this.uo=uo;        this.vo=vo;        this.texture = texturefunc;
+                                return this;
+                        }
+                        p.setbitmap = function(imgurl) { Texture.setbitmap(this, imgurl); return this; }
+                        p.texture = function(){};
+
+                        p.hit = di_hit;
+                        p.intersect = di_intersect;
+                        p.li_intersect = di_li_intersect;
+                        p.getuv = function() {
+                                var dx,dy,dz;
+                                dx= Vars.ix-this.x;        dy= Vars.iy-this.y;        dz= Vars.iz-this.z;
+                                this.u = this.uo + (dx*this.ux + dy*this.uy + dz*this.uz)/this.ul2;
+                                this.u = this.uo + (dx*this.ux + dy*this.uy + dz*this.uz)/this.ul2;
+                                this.v = 1 - this.vo - (dx*this.vx + dy*this.vy + dz*this.vz)/this.vl2;
+                        }
+
+                        p.precalc();
+                        p.obj = Vars.numob;
+                        Vars.ob[Vars.numob++] = p;
+                        Vars.numpl++;
+                        return p;
+                }
+                function di_intersect() {
+                        var t,cix,ciy,ciz;
+                        if (this.obj==Vars.iobj) return;
+                        t = (this.D - this.nx*Vars.r.ox - this.ny*Vars.r.oy - this.nz*Vars.r.oz) /
+                                (this.nx*Vars.r.dx + this.ny*Vars.r.dy + this.nz*Vars.r.dz);
+                        if (t<=0 || t>=Vars.mt) return;
+                        cix = Vars.r.ox + t*Vars.r.dx - this.x;
+                        ciy = Vars.r.oy + t*Vars.r.dy - this.y;
+                        ciz = Vars.r.oz + t*Vars.r.dz - this.z;
+                        if ((cix*cix+ciy*ciy+ciz*ciz) > this.r2) return;
+                        Vars.mt=t; Vars.mo=this.obj;        Vars.mndir=1;
+                }
+                function di_hit() {
+                        // incident point
+                        Vars.ix = Vars.r.ox + Vars.r.dx*Vars.mt;
+                        Vars.iy = Vars.r.oy + Vars.r.dy*Vars.mt;
+                        Vars.iz = Vars.r.oz + Vars.r.dz*Vars.mt;
+                        // normal
+                        Vars.nx = this.nx;
+                        Vars.ny = this.ny;
+                        Vars.nz = this.nz;
+                }
+                function di_li_intersect() {
+                        if (this.obj==Vars.iobj) return false;
+                        var t,x,y,z;
+                        t = (this.D - this.nx*Vars.ix - this.ny*Vars.iy - this.nz*Vars.iz) / (this.nx*Vars.lx + this.ny*Vars.ly + this.nz*Vars.lz);
+                        if (t<=0 || t>=1) return false;
+
+                        x = Vars.ix + t*Vars.lx - this.x;
+                        y = Vars.iy + t*Vars.ly - this.y;
+                        z = Vars.iz + t*Vars.lz - this.z;
+                        return ((x*x+y*y+z*z)<=this.r2);
+                }
+                function light(x,y,z, r,g,b) {
+                        Vars.li[Vars.numli] = new Object();
+                        var l = Vars.li[Vars.numli];
+                        l.x=x;        l.y=y;        l.z=z;
+                        l.r=r;        l.g=g;        l.b=b;
+                        l.rad=5;
+
+                        l.precalc = function() {
+                                this.ir = 1/this.rad;
+                                this.c = this.x*this.x + this.y*this.y + this.z*this.z - this.rad*this.rad;
+                        };
+                        l.intersect = light_intersect;
+
+                        Vars.numli++;
+                        return l;
+                }
+                function light_intersect() {
+                        var b,b2,c,d, t;
+                        b = this.x*Vars.r.dx + this.y*Vars.r.dy + this.z*Vars.r.dz - Vars.r.odotd;
+                        if (b<0) return false;
+                        b2= b*b;
+                        c = Vars.r.odoto - 2*(this.x*Vars.r.ox + this.y*Vars.r.oy + this.z*Vars.r.oz) + this.c;
+                        d = b2 - Vars.r.ddotd*c;
+                        if (d<0) return false;
+                        if (b2>d) t=(b-Math.sqrt(d))/Vars.r.ddotd; else t=(b+Math.sqrt(d))/Vars.r.ddotd;
+                        if (t<=0 || t>=Vars.mt) return false;
+                        Vars.iz = Vars.r.oz + t*Vars.r.dz;
+                        Vars.nz = (Vars.iz - this.z)*this.ir;
+                        return true;
+                }
+            return {
+                sphere: sphere,
+                cylinder: cylinder,
+                disc: disc,
+                light: light
+            };
+        })();
+        var Texture = (function() {
+            function tilebitmap() {
+                    var i;
+                    this.getuv();
+                    this.u = (this.u*this.bmpw % this.bmpw)|0;
+                    this.v = (this.v*this.bmph % this.bmph)|0;
+                    if (this.u<0) this.u+=this.bmpw;
+                    if (this.v<0) this.v+=this.bmph;
+                    i = (this.v*this.bmpw + this.u)*3;
+                    this.cr = this.bmp[i]*this.ocr;
+                    this.cg = this.bmp[i+1]*this.ocg;
+                    this.cb = this.bmp[i+2]*this.ocb;
+            }
+            function tilebitmap_bi() {
+                    var i,u,v,fu,fv,f,r,g,b,p;
+                    this.getuv();
+                    fu = (this.u*this.bmpw)%this.bmpw;        if (fu<0) fu+=this.bmpw;
+                    fv = (this.v*this.bmph)%this.bmph;        if (fv<0) fv+=this.bmph;
+                    u = fu|0;        fu-=u;        v = fv|0;        fv-=v;
+
+                    p = this.bmp;                i=(v*this.bmpw+u)*3;        f=(1-fu)*(1-fv);
+                    r=p[i]*f;        g=p[i+1]*f;                b=p[i+2]*f;
+
+                    u=(u+1)%this.bmpw;        i=(v*this.bmpw+u)*3;        f=fu*(1-fv);
+                    r+=p[i]*f;        g+=p[i+1]*f;        b+=p[i+2]*f;
+
+                    v=(v+1)%this.bmph;        i=(v*this.bmpw+u)*3;        f=fu*fv;
+                    r+=p[i]*f;        g+=p[i+1]*f;        b+=p[i+2]*f;
+
+                    u=(u-1)%this.bmpw;        i=(v*this.bmpw+u)*3;        f=(1-fu)*fv;
+                    r+=p[i]*f;        g+=p[i+1]*f;        b+=p[i+2]*f;
+
+                    this.cr = r*this.ocr;
+                    this.cg = g*this.ocg;
+                    this.cb = b*this.ocb;
+            }
+            function bitmap() {
+                    var i;
+                    this.getuv();
+                    this.u = (this.u*this.bmpw)|0;
+                    this.v = (this.v*this.bmph)|0;
+                    if (this.u<0 || this.v<0 || this.u>=this.bmpw || this.v>=this.bmph) {
+                            this.cr=this.ocr;        this.cg=this.ocg;        this.cb=this.ocb;
+                    } else {
+                            i = (this.v*this.bmpw + this.u)*3;
+                            this.cr = this.bmp[i]*this.ocr;
+                            this.cg = this.bmp[i+1]*this.ocg;
+                            this.cb = this.bmp[i+2]*this.ocb;
+                    }
+            }
+            function bitmap_bi() {
+                    var i,u,v,fu,fv,f,r,g,b,p;
+                    this.getuv();
+                    p = this.bmp;
+                    fu = this.u*this.bmpw;        u = fu|0;        fu-=u;
+                    fv = this.v*this.bmph;        v = fv|0;        fv-=v;
+                    i = (v*this.bmpw+u)*3;        f = (1-fu)*(1-fv);
+                    if (u<0||v<0||u>=this.bmpw||v>=this.bmph) { r=f;  g=f;  b=f; }
+                    else { r=p[i]*f;        g=p[i+1]*f;        b=p[i+2]*f; }
+                    u++; i+=3; f = fu*(1-fv);
+                    if (u<0||v<0||u>=this.bmpw||v>=this.bmph) { r+=f; g+=f; b+=f; }
+                    else { r+=p[i]*f;        g+=p[i+1]*f;        b+=p[i+2]*f; }
+                    v++; i+=this.bmpw*3; f = fu*fv;
+                    if (u<0||v<0||u>=this.bmpw||v>=this.bmph) { r+=f; g+=f; b+=f; }
+                    else { r+=p[i]*f;        g+=p[i+1]*f;        b+=p[i+2]*f; }
+                    u--; i-=3; f = (1-fu)*fv;
+                    if (u<0||v<0||u>=this.bmpw||v>=this.bmph) { r+=f; g+=f; b+=f; }
+                    else { r+=p[i]*f;        g+=p[i+1]*f;        b+=p[i+2]*f; }
+
+                    this.cr = r*this.ocr;
+                    this.cg = g*this.ocg;
+                    this.cb = b*this.ocb;
+            }
+            function envmap() {
+                    var i,u,v;
+                    u = (this.bmpwh + Vars.nx*this.bmpwh)|0;
+                    v = (this.bmphh - Vars.ny*this.bmphh)|0;
+                    i = (v*this.bmpw + u)*3;
+                    this.cr = this.bmp[i]*this.ocr;
+                    this.cg = this.bmp[i+1]*this.ocg;
+                    this.cb = this.bmp[i+2]*this.ocb;
+            }
+            function chequer1() {
+                    var u,v,i;
+                    this.getuv();
+                    u = Math.floor(this.u);
+                    v = Math.floor(this.v);
+                    i = (u^v)&1;
+                    this.cr=this.cg=i; this.cb=1-i;
+            }
+            function chequer2() {
+                    var u,v,i;
+                    this.getuv();
+                    u = Math.floor(this.u);
+                    v = Math.floor(this.v);
+                    this.cr=this.cg=this.cb=(u^v)&1;
+            }
+            function swirl() {
+                    var u;
+                    this.getuv();
+                    u = (this.u + this.v*this.vl)%this.ul;
+                    if (u>=0 && u<this.ul*0.33) {
+                            this.cr = this.cg = this.cb = 1;
+                    } else {
+                            this.cr = this.cg = this.cb = 0.5;
+                    }
+            }
+            function setbitmap(o, imgurl) {
+                    if (Vars.textures[o.obj]==undefined) {
+                            Vars.texturewaiting++;
+
+                            var t = new Object();
+                            o.tex = t;
+                            t.i = new Image();
+                            t.i.ownerobj = o;
+                            t.i.onload = gotbitmap;
+                            t.i.src = imgurl;
+
+                            Vars.textures[o.obj] = t;
+                    } else {
+                            var t = Vars.textures[o.obj];
+                            o.tex  = t;
+                            o.bmp  = t.bmp;
+                            o.bmpw = t.i.width;
+                            o.bmph = t.i.height;
+                            o.bmpwh= t.i.width/2|0;
+                            o.bmphh= t.i.height/2|0;
+                    }
+            }
+            function gotbitmap() {        // this==Image()
+                    var o=this.ownerobj;
+                    if (o.tex) {
+                            var t=o.tex, w=this.width, h=this.height;
+                            if (Vars.show) {
+                                    t.canv = document.createElement('CANVAS');
+                                    t.canv.setAttribute('width', w);
+                                    t.canv.setAttribute('height', h);
+                                    t.ctx = t.canv.getContext("2d");
+                                    t.ctx.drawImage(this, 0,0);
+                                    o.bmp = new Array();
+                            }
+                            if (t.ctx && t.ctx.getImageData) {
+                                    var pix = t.pix = t.ctx.getImageData(0,0,w,h).data;
+                                    for (var i=0,j=0,b=o.bmp; i<w*h*4; i++) {
+                                            b[j++]=pix[i++]/255;        b[j++]=pix[i++]/255;        b[j++]=pix[i++]/255;
+                                    }
+                            } else {
+                                    o.bmp = new Array();
+                                    for (var i=0; i<w*h*3; i++) o.bmp[i]=0.5;
+                            }
+                            o.bmpw=w;                o.bmph=h;
+                            o.bmpwh=w/2|0;        o.bmphh=h/2|0;
+                            o.tex.bmp = o.bmp;
+                    } else {
+                            alert("Error loading "+this.src+" - expect script errors");
+                    }
+
+                    if (--Vars.texturewaiting<=0) setTimeout(Scenegraph.startframe, 100);
+            }
+            return {
+                tilebitmap: tilebitmap,
+                tilebitmap_bi: tilebitmap_bi,
+                bitmap: bitmap,
+                bitmap_bi: bitmap_bi,
+                chequer1: chequer1,
+                chequer2: chequer2,
+                swirl: swirl,
+                setbitmap: setbitmap
+            };
+        })();
+        var Scenegraph = (function() {
+            function scene() {
+                    Vars.texturewaiting = 0;
+                    var s,p,d;
+
+                    //bilinear = getl("bicheck").checked;
+                    var bitfunc = Vars.bilinear ? Texture.bitmap_bi : Texture.bitmap;
+                    var tilefunc = Vars.bilinear ? Texture.tilebitmap_bi : Texture.tilebitmap;
+
+                    Vars.ob = new Array();
+                    Vars.sp = new Array();
+                    Vars.pl = new Array();
+                    Vars.li = new Array();
+                    Vars.cy = new Array();
+                    Vars.numob = Vars.numsp = Vars.numpl = Vars.numli = Vars.numcy = 0;
+
+                    Primitives.sphere(  60,   0,   0, 70, 0.1,0.1,0.1, 0.5,1.0,64, 1.0);        // white sphere
+                    Primitives.sphere( -40, -45,-130, 25, 1,0,0, 1.0,1.0, 8, 0.6).                        // red sphere
+                            setuv(1,0,0, 0,1,0, 0,0, tilefunc).setbitmap("textures/dark-green-marble.jpg");
+                    Primitives.sphere( -70, -20,   0, 50, 0,1,0, 0.5,1.0,16, 0.5).                        // green sphere
+                            sethalf(0.25,1,-0.25, 0.3,0.5,0.3, 0.5,1.0,32, 0.8);
+                    Primitives.sphere(  95, -50,-125, 20, 0,0,1, 0.8,0.7,16, 0.6);                        // blue sphere
+
+    //                plane(0,-70,0, 0,-70,-100, -200,-70,0, 1,1,1, 0.6,1.0,32, 0.4);
+                            //setuv(300,0,0, 0,0,300, 0,0, tilefunc).setbitmap("textures/black-marble.jpg");
+
+                    Primitives.disc(0,60,140,        0,0,-1,                150, 1,1,1, 0.5,1.0,64, 0.6).                // far
+                            setuv(300,0,0, 0,300,0, 0.5,0.5, bitfunc).setbitmap("textures/onix-pina.jpg");
+                    Primitives.disc(0,-70,0,        0,1,0,                230, 1,1,1, 0.6,1.0,64, 0.4).                // bottom
+                            setuv(300,0,0, 0,0,300, 0,0, tilefunc).setbitmap("textures/black-marble.jpg");
+                    Primitives.disc(-150,0,-50, 1,0.2,-0.2, 70, 0,0,0, 0.5,1.0,32, 0.2).                // left
+                            setuv(0,20,0, 0,0,20, 0,0,        Texture.chequer1);
+                    Primitives.disc(150,0,-50, -1,0.2,-0.2, 70, 0,0,0, 0.5,1.0,32, 0.4).                // right
+                            setuv(0,20,0, 0,0,20, 0,0,        Texture.chequer2);
+
+                    //cylinder(0,-50,-50, 40,-50,-160, 20, 1,1,0, 0.5,1.0,32, 0.5);
+                    Primitives.cylinder(20,-70,-110, 20,-20,-110, 30, 1,1,1, 0.6,1.0,32, 0.25).
+                            setuv(-3,0,0, 0,1,0, 0,0, tilefunc).
+                            setbitmap("textures/happy.png").//marble-grn-1.jpg
+                            setinside(0.35,0.35,0.35, 0.5,1.0,32, 1.0).
+                            setuv(10,0,0, 0,6,0, 0,0, Texture.swirl);
+
+
+                    Primitives.light( 180, 80, -80, 1.0,1.0,1.0);        // white light
+                    Primitives.light(-140,   0,-180, 1.0,0.2,1.0);        // purple light
+                    Primitives.light(   0, 120,-240, 0.6,0.6,0.6);
+
+                    createviewmatrix();
+
+                    // apply transform
+                    var i,j,k;
+                    for (i=0; i<Vars.numli; i++) {
+                            transform_obj(Vars.li[i]);
+                            Vars.li[i].precalc();
+                    }
+                    for (i=0; i<Vars.numob; i++) {
+                            transform_obj(Vars.ob[i]);
+                            if (Vars.ob[i].precalc) Vars.ob[i].precalc();
+                            if (Vars.ob[i].inside) {
+                                    transform_obj(Vars.ob[i].inside);
+                                    Vars.ob[i].inside.precalc();
+                            }
+                    }
+
+                    for (j=0; j<Vars.maxlevel; j++) {
+                            last_li[j] = new Array();
+                            for (k=0; k<Vars.numli; k++) last_li[j][k]=-1;
+                    }
+
+                    return !Vars.texturewaiting;
+            }
+            function transform(x,y,z, tl) {
+                    var t = new Object();
+                    t.x = x*Vars.viewmat[0].x        + y*Vars.viewmat[1].x        + z*Vars.viewmat[2].x + Vars.viewmat[3].x*tl;
+                    t.y = x*Vars.viewmat[0].y        + y*Vars.viewmat[1].y        + z*Vars.viewmat[2].y + Vars.viewmat[3].y*tl;
+                    t.z = x*Vars.viewmat[0].z        + y*Vars.viewmat[1].z        + z*Vars.viewmat[2].z + Vars.viewmat[3].z*tl;
+                    return t;
+            }
+            function transform_obj(o) {
+                    var t;
+                    t = transform(o.x-Vars.look.x, o.y-Vars.look.y, o.z-Vars.look.z, 1);
+                    o.x=t.x;        o.y=t.y;        o.z=t.z;
+                    if (o.x1!=undefined) {
+                            t = transform(o.x1-Vars.look.x, o.y1-Vars.look.y, o.z1-Vars.look.z, 1);
+                            o.x1=t.x;        o.y1=t.y;        o.z1=t.z;
+                    }
+                    if (o.nx!=undefined) {
+                            t = transform(o.nx, o.ny, o.nz, 0);        o.nx=t.x;        o.ny=t.y;        o.nz=t.z;
+                    }
+                    if (o.ux!=undefined) {
+                            t = transform(o.ux, o.uy, o.uz, 0);        o.ux=t.x;        o.uy=t.y;        o.uz=t.z;
+                    }
+                    if (o.vx!=undefined) {
+                            t = transform(o.vx, o.vy, o.vz, 0);        o.vx=t.x;        o.vy=t.y;        o.vz=t.z;
+                    }
+                    if (o.wx!=undefined) {
+                            t = transform(o.wx, o.wy, o.wz, 0);        o.wx=t.x;        o.wy=t.y;        o.wz=t.z;
+                    }
+            }
+            function createviewmatrix() {
+                    var xx,xy,xz, yx,yy,yz, zx,zy,zz, tx,ty,tz, l;
+
+                    // Normalise up (y) vector
+                    l=Math.sqrt(Vars.up.x*Vars.up.x + Vars.up.y*Vars.up.y + Vars.up.z*Vars.up.z);
+                    yx=Vars.up.x/l;        yy=Vars.up.y/l;        yz=Vars.up.z/l;
+
+                    // Normalise lookat (z) vector
+                    zx=Vars.look.x-Vars.cam.x;        zy=Vars.look.y-Vars.cam.y;        zz=Vars.look.z-Vars.cam.z;
+                    l=Math.sqrt(zx*zx+zy*zy+zz*zz);
+                    zx=zx/l;        zy=zy/l;        zz=zz/l;
+
+                    // Cross-product (up x lookat) to get right vector
+                    xx = Vars.up.y*zz - Vars.up.z*zy;
+                    xy = Vars.up.z*zx - Vars.up.x*zz;
+                    xz = Vars.up.x*zy - Vars.up.y*zx;
+                    l=Math.sqrt(xx*xx+xy*xy+xz*xz);
+                    xx/=l;                xy/=l;                xz/=l;
+
+                    // Cross-product (lookat x right) to get orthogonal right vector
+                    yx = zy*xz - zz*xy;
+                    yy = zz*xx - zx*xz;
+                    yz = zx*xy - zy*xx;
+                    l=Math.sqrt(yx*yx+yy*yy+yz*yz);
+                    yx/=l;                yy/=l;                yz/=l;
+
+                    l=Math.sqrt(Vars.cam.x*Vars.cam.x + Vars.cam.y*Vars.cam.y + Vars.cam.z*Vars.cam.z);
+
+                    // Store the matrix
+                    Vars.viewmat[0].x=xx;        Vars.viewmat[0].y=yx;        Vars.viewmat[0].z=zx;
+                    Vars.viewmat[1].x=xy;        Vars.viewmat[1].y=yy;        Vars.viewmat[1].z=zy;
+                    Vars.viewmat[2].x=xz;        Vars.viewmat[2].y=yz;        Vars.viewmat[2].z=zz;
+                    Vars.viewmat[3].x=0;                Vars.viewmat[3].y=0;                Vars.viewmat[3].z=l;
+            }
+            function load() {
+                    if (Vars.getl("xangle").value!="") Vars.cam.x = parseFloat(Vars.getl("xangle").value);
+                    if (Vars.getl("yangle").value!="") Vars.cam.y = parseFloat(Vars.getl("yangle").value);
+                    if (Vars.getl("zangle").value!="") Vars.cam.z = parseFloat(Vars.getl("zangle").value);
+                    Vars.getl("xangle").value = Vars.cam.x;
+                    Vars.getl("yangle").value = Vars.cam.y;
+                    Vars.getl("zangle").value = Vars.cam.z;
+
+                    curline=0;
+                    if (timer) { clearTimeout(timer); timer=false; }
+
+                    Vars.canv = Vars.getl("canv");
+                    if (Vars.canv && Vars.canv.getContext) {
+                            Vars.wid = Vars.canv.attributes.width.value;
+                            Vars.hei = Vars.canv.attributes.height.value;
+                            Vars.ctx = Vars.canv.getContext("2d");
+                            if (Vars.ctx.getImageData) Vars.show = true;
+                    }
+                    if (!Vars.show) {
+                            Vars.pix = new Array();
+                            Vars.wid = Vars.getl("canvdiv").clientWidth;
+                            Vars.hei = Vars.getl("canvdiv").clientHeight;
+                            if (!Vars.ctx) {
+                                    Vars.getl("msg").innerHTML="Use Firefox (3.1 beta preferably), Opera, Safari, Chrome,<br/>or almost any non-IE browser to see the output";
+                            } else {
+                                    Vars.getl("msg").innerHTML="Use Firefox (3.1 beta perferably), Opera 9.60, or latest<br/>Safari/WebKit for textures, and faster rendering";
+                            }
+                    }
+
+                    Vars.wh = Vars.wid/2;
+                    Vars.hh = Vars.hei/2;
+
+                    Vars.vw = -Vars.eyez * 2 / Math.tan((90-Vars.fov/2)*Vars.rdn);
+                    Vars.vh = Vars.vw * Vars.hei/Vars.wid;
+                    Vars.fovy = 2 * (90-Math.atan(-Vars.eyez/(Vars.vh/2))/Vars.rdn);
+                    Vars.ivw = Vars.vw/Vars.wid;
+                    Vars.ivh = Vars.vh/Vars.hei;
+
+                    renderframe();
+            }
+            function refresh() {
+                    if (curline>0) Vars.getl("progress").innerHTML = "Rendering: "+Math.round(curline*100/Vars.hei)+"%";
+
+                    if (Vars.show) {
+                            Vars.ctx.putImageData(Vars.imgdata, 0,0);
+                            // Hack to get firefox2 to show the updated canvas
+                            Vars.toggle=1-Vars.toggle;
+                            Vars.getl("canvdiv").style.left=Vars.toggle+"px";
+                    } else if (curline==0) {
+                            var x,y,xy,p=Vars.pix;
+                            for (xy=y=0; y<Vars.hei; y++) {
+                                    for (x=0; x<Vars.wid; x++,xy+=4) {
+                                            Vars.ctx.fillStyle="rgb("+p[xy]+","+p[xy+1]+","+p[xy+2]+")";
+                                            Vars.ctx.fillRect(x,y,x+1,y+1);
+                                    }
+                            }
+                            Vars.getl("progress2").innerHTML = "&;";
+                    }
+            }
+            function intersect() {
+                    var i;
+                    Vars.mt=99999; Vars.mo=-1;
+
+                    for (i=0; i<Vars.numob; i++) Vars.ob[i].intersect(i);
+
+                    // Incident point & eye vector
+                    if (Vars.mo>=0) {
+                            Vars.ndir = Vars.mndir;
+                            Vars.ob[Vars.mo].hit(Vars.mt);        Vars.ez=Vars.iz-Vars.eyez;
+                            Vars.idoti = Vars.ix*Vars.ix + Vars.iy*Vars.iy + Vars.iz*Vars.iz;
+                    }
+                    return Vars.mo;
+            }
+            var last_li = new Array();
+            var llast;
+            function li_intersect(l) {
+                    var i,last;
+
+                    // If normal points away from light, point is in shadow of intersected object
+                    if ((Vars.nx*Vars.lx+Vars.ny*Vars.ly+Vars.nz*Vars.lz)<=0) return true;
+
+                    Vars.ldotl = Vars.lx*Vars.lx + Vars.ly*Vars.ly + Vars.lz*Vars.lz;
+                    Vars.idotl = Vars.ix*Vars.lx + Vars.iy*Vars.ly + Vars.iz*Vars.lz;
+
+                    last = llast[l];
+                    if (last>=0 && Vars.ob[last].li_intersect()) { return true; }
+
+                    for (i=0; i<Vars.numob; i++) {
+                            if (i==last || !Vars.ob[i].li_intersect()) continue;
+                            llast[l] = i;
+                            return true;
+                    }
+                    return false;
+            }
+            function shade(obj) {
+                    var i,j,a,d,p,b,s, ll, rx,ry,rz;
+                    llast = last_li[level];
+                    s=Vars.ob[obj];
+                    a=-1;
+                    Vars.cr=Vars.cg=Vars.cb=0;
+                    if (Vars.ndir<0 && s.inside) s=s.inside;
+                    if (s.texture) s.texture();
+                    // sum the lights
+                    for (i=0; i<Vars.numli; i++) {
+                            // light vector
+                            Vars.lx = Vars.li[i].x - Vars.ix;
+                            Vars.ly = Vars.li[i].y - Vars.iy;
+                            Vars.lz = Vars.li[i].z - Vars.iz;
+                            // early out if in shadow
+                            if (li_intersect(i)) continue;
+
+                            // distance to light
+                            ll = 1/Math.sqrt(Vars.lx*Vars.lx+Vars.ly*Vars.ly+Vars.lz*Vars.lz);
+
+                            // diffuse (lambert) = cos(|normal dot light|)
+                            d = (Vars.nx*Vars.lx+Vars.ny*Vars.ly+Vars.nz*Vars.lz)*ll;
+                            if (d<0) d=0; else d*=s.d;
+
+                            // light reflection vector
+                            b = 2*(Vars.lx*Vars.nx+Vars.ly*Vars.ny+Vars.lz*Vars.nz);
+                            rx = b*Vars.nx - Vars.lx;
+                            ry = b*Vars.ny - Vars.ly;
+                            rz = b*Vars.nz - Vars.lz;
+
+                            // phong = cos(|light reflection dot eye|)^n
+                            if (a<0) a = 1/Math.sqrt(Vars.ix*Vars.ix + Vars.iy*Vars.iy + Vars.ez*Vars.ez);
+                            p = -(rx*Vars.ix+ry*Vars.iy+rz*Vars.ez)*a*ll;
+                            if (p<0) { if (d==0) continue; p=0; }
+                            else { p=Math.pow(p,s.pp)*s.p; }
+
+                            Vars.cr += (d*s.cr + p)*Vars.li[i].r;
+                            Vars.cg += (d*s.cg + p)*Vars.li[i].g;
+                            Vars.cb += (d*s.cb + p)*Vars.li[i].b;
+                    }
+            }
+            var pcr,pcg,pcb,level,rf;
+            function cast() {
+                    var t, obj,o;
+
+                    Vars.iobj = -1;
+                    level = 0;
+                    // find closest intersection
+                    obj = intersect();
+                    for (o=0; o<Vars.numli; o++) { if (Vars.li[o].intersect()) obj=Vars.numob+o; }
+                    if (obj>=Vars.numob) {
+                            o = Vars.li[obj-Vars.numob];        Vars.nz=0.5-Vars.nz*2;
+                            pcr+=o.r*Vars.nz;        pcg+=o.g*Vars.nz;        pcb+=o.b*Vars.nz;
+                            return true;
+                    }
+                    if (obj<0) return false;
+                    Vars.iobj = obj;
+
+                    shade(obj);
+                    t = (Vars.ndir<0 && Vars.ob[obj].inside) ? Vars.ob[obj].inside : Vars.ob[obj];
+                    pcr+=Vars.cr+t.cr*Vars.amb;
+                    pcg+=Vars.cg+t.cg*Vars.amb;
+                    pcb+=Vars.cb+t.cb*Vars.amb;
+                    rf=1;
+
+                    // recurse reflections
+                    for (level=1; level<Vars.maxlevel; level++) {
+                            rf *= (Vars.ndir<0 && Vars.ob[obj].inside) ? Vars.ob[obj].inside.rf : Vars.ob[obj].rf;
+                            if (rf<=0) break;
+                            // calculate reflected ray
+                            t = 2*(Vars.nx*Vars.r.dx + Vars.ny*Vars.r.dy + Vars.nz*Vars.r.dz);
+                            Vars.r.ox = Vars.ix;                Vars.r.oy = Vars.iy;                Vars.r.oz = Vars.iz;
+                            Vars.r.dx-= t*Vars.nx;        Vars.r.dy-= t*Vars.ny;        Vars.r.dz-= t*Vars.nz;
+                            // some dot-prods
+                            Vars.r.odotd = Vars.r.ox*Vars.r.dx + Vars.r.oy*Vars.r.dy + Vars.r.oz*Vars.r.dz;
+                            Vars.r.odoto = Vars.r.ox*Vars.r.ox + Vars.r.oy*Vars.r.oy + Vars.r.oz*Vars.r.oz;
+
+                            // find closest intersection
+                            obj = intersect(obj);
+                            if (obj<0) break;
+                            Vars.iobj = obj;
+                            shade(obj);
+
+                            pcr+=Vars.cr*rf;        pcg+=Vars.cg*rf;        pcb+=Vars.cb*rf;
+                    }
+                    //if (level>=20) { pcr=pcg=pcb=1; }
+
+                    return true;
+            }
+            var curline = 0;
+            var timer = null;
+            var start;
+            var anim=false;
+            function renderframe() {
+                    var i;
+                    if (curline>0) return;
+                    curline = 0;
+
+    /*                var ang = (framenum*15)*3.141592654/180;
+                ang = Math.sin(ang*3.141592654/2);
+                var sin = Math.sin(ang),
+                        cos = Math.cos(ang);
+                cam.x = 0;
+                cam.y = sin*300;
+                cam.z = 1 - (cos)*300;
+                //cam.x = sin*300;
+                //cam.y = 0;
+                //cam.z = -cos*300;*/
+
+                    if (scene()) startframe();
+                    // else startframe() will be called back when pending images have loaded
+            }
+            var updatetimer=false;
+            function startframe() {
+                    if (Vars.show && !Vars.imgdata) {
+                            Vars.ctx.fillRect(0,0, Vars.wid,Vars.hei);
+                            Vars.imgdata = Vars.ctx.getImageData(0,0,Vars.wid,Vars.hei);
+                            Vars.pix = Vars.imgdata.data;
+                    }
+
+                    Vars.getl("progress").innerHTML = "Rendering: 0%";
+                    start = new Date();
+                    updatetimer=setInterval(refresh, 500);
+                    setTimeout(tick, 1);
+            }
+            function tick() {
+                    var x,y, lr=0,lg=0,lb=0,R,G,B,d,xa,ya;
+                    var num=0;
+
+                    if (!Vars.antialias) {
+                            pcr=pcg=pcb=0;
+                            for (Vars.xy=curline*Vars.wid*4, y=curline-Vars.hh; y<Vars.hh && num<2; y++,num++,curline++) {
+                                    for (x=-Vars.wh; x<Vars.wh; x++,Vars.xy+=4) {
+                                            Vars.r.ox = Vars.r.dx = Vars.ivw*x;
+                                            Vars.r.oy = Vars.r.dy = -Vars.ivh*y;
+                                            Vars.r.oz = 0;        Vars.r.dz = -Vars.eyez;
+                                            Vars.r.odoto = Vars.r.odotd = Vars.r.ox*Vars.r.ox + Vars.r.oy*Vars.r.oy;
+                                            Vars.r.ddotd = Vars.r.odoto + Vars.r.dz*Vars.r.dz;
+
+                                            if (!cast()) {
+                                                    Vars.pix[Vars.xy]=Vars.pix[Vars.xy+1]=Vars.pix[Vars.xy+2]=0;
+                                                    continue;
+                                            }
+                                            Vars.pix[Vars.xy]=(pcr>1)?255:(pcr*255|0);
+                                            Vars.pix[Vars.xy+1]=(pcg>1)?255:(pcg*255|0);
+                                            Vars.pix[Vars.xy+2]=(pcb>1)?255:(pcb*255|0);
+                                            pcr=pcg=pcb=0;
+                                    }
+                            }
+                    } else {
+                            for (Vars.xy=curline*Vars.wid*4, y=curline-Vars.hh; y<Vars.hh && num<2; y++,num++,curline++) {
+                                    for (x=-Vars.wh; x<Vars.wh; x++,Vars.xy+=4) {
+                                            pcr=pcg=pcb=0;
+                                            Vars.r.ox=Vars.r.dx=(x-0.25)*Vars.ivw;        Vars.r.oy=Vars.r.dy=(-y-0.25)*Vars.ivh;        Vars.r.oz=0;        Vars.r.dz=-Vars.eyez;
+                                            Vars.r.odotd=Vars.r.odoto=Vars.r.ox*Vars.r.ox+Vars.r.oy*Vars.r.oy;        Vars.r.ddotd=Vars.r.odoto+Vars.eyez2;        cast();
+    //                                        R=lr-pcr; G=lg-pcg; B=lb-pcb; d=R*R+G*G+B*B;
+    //                                        if (d>0.5) {
+                                                    Vars.r.ox=Vars.r.dx=(x+0.25)*Vars.ivw;        Vars.r.oy=Vars.r.dy=(-y-0.25)*Vars.ivh;        Vars.r.oz=0;        Vars.r.dz=-Vars.eyez;
+                                                    Vars.r.odotd=Vars.r.odoto=Vars.r.ox*Vars.r.ox+Vars.r.oy*Vars.r.oy;        Vars.r.ddotd=Vars.r.odoto+Vars.eyez2;        cast();
+                                                    Vars.r.ox=Vars.r.dx=(x-0.25)*Vars.ivw;        Vars.r.oy=Vars.r.dy=(-y+0.25)*Vars.ivh;        Vars.r.oz=0;        Vars.r.dz=-Vars.eyez;
+                                                    Vars.r.odotd=Vars.r.odoto=Vars.r.ox*Vars.r.ox+Vars.r.oy*Vars.r.oy;        Vars.r.ddotd=Vars.r.odoto+Vars.eyez2;        cast();
+                                                    Vars.r.ox=Vars.r.dx=(x+0.25)*Vars.ivw;        Vars.r.oy=Vars.r.dy=(-y+0.25)*Vars.ivh;        Vars.r.oz=0;        Vars.r.dz=-Vars.eyez;
+                                                    Vars.r.odotd=Vars.r.odoto=Vars.r.ox*Vars.r.ox+Vars.r.oy*Vars.r.oy;        Vars.r.ddotd=Vars.r.odoto+Vars.eyez2;        cast();
+                                                    Vars.pix[Vars.xy]=(pcr>4)?255:(pcr*63.75|0);
+                                                    Vars.pix[Vars.xy+1]=(pcg>4)?255:(pcg*63.75|0);
+                                                    Vars.pix[Vars.xy+2]=(pcb>4)?255:(pcb*63.75|0);
+    //                                        } else {
+    //                                                pix[xy]=(pcr>1)?255:(pcr*255|0);
+    //                                                pix[xy+1]=(pcg>1)?255:(pcg*255|0);
+    //                                                pix[xy+2]=(pcb>1)?255:(pcb*255|0);
+    //                                        }
+    //                                        lr=pcr; lg=pcg; lb=pcb;
+                                    }
+                            }
+                    }
+
+                    if (curline<Vars.hei) {
+                            timer = setTimeout(tick, 0);
+                    } else {
+                            if (updatetimer) { clearInterval(updatetimer); updatetimer=false; }
+                            var end = new Date();
+                            Vars.getl("progress").innerHTML = Vars.framenum+" Time: "+(end.getTime()-start.getTime())+"ms";
+                            curline = 0;
+                            if (Vars.ctx && !Vars.show) {
+                                    Vars.getl("progress2").innerHTML += "Plotting...";
+                                    setTimeout(refresh, 100);
+                            } else
+                                    refresh();
+
+                            Vars.framenum++;
+
+                            if (anim) {
+                                    timer = setTimeout(renderframe, 1);
+                            }
+                    }
+            }
+            function hun(x) { return Math.round(x*100)/100; }
+            function randomview() {
+                    var a = Math.random()*2*3.141592654,
+                            e = Math.random()*300 - 30,
+                            r = 50 + Math.random()*350;
+                    Vars.cam.x = Math.round(r * Math.sin(a) * 10)/10;
+                    Vars.cam.z = Math.round(r * Math.cos(a) * 10)/10;
+                    Vars.cam.y = Math.round(e * 10)/10;
+
+                    //getl("dbg").innerHTML = "x:"+hun(cam.x)+", y:"+hun(cam.y)+", z:"+hun(cam.z);
+                    Vars.getl("xangle").value = Vars.cam.x;
+                    Vars.getl("yangle").value = Vars.cam.y;
+                    Vars.getl("zangle").value = Vars.cam.z;
+
+                    //anim = !anim;        if (anim)
+                    //load();
+            }
+            function changesize() {
+                    var x,y;
+                    switch (Vars.getl("sizesel").value) {
+                    case "100x80" :                x=100;        y=80;        break;
+                    case "200x160":                x=200;        y=160;        break;
+                    case "320x256":                x=320;        y=256;        break;
+                    case "400x320":                x=400;        y=320;        break;
+                    case "500x400":                x=500;        y=400;        break;
+                    case "640x512":                x=640;        y=512;        break;
+                    case "800x640":                x=800;        y=640;        break;
+                    case "1200x960":        x=1200;        y=960;        break;
+                    case "1680x1050":        x=1680;        y=1050;        break;
+                    default:return;
+                    }
+
+                    var div = Vars.getl("canvdiv");
+                    div.style.width = x+"px";
+                    div.style.height= y+"px";
+
+                    var canv = Vars.getl("canv");
+                    if (canv && canv.getContext) {
+                            canv.attributes.width.value = x;
+                            canv.attributes.height.value = y;
+                            canv.width = x;
+                            canv.height = y;
+                            Vars.imgdata = false;
+                    }
+                    load();
+            }
+            function changeaa() { Vars.antialias = Vars.getl("aacheck").checked; }
+            return {
+                load: load,
+                startframe: startframe,
+                randomview: randomview,
+                changesize: changesize,
+                changeaa: changeaa
+            };
+        })();
+
+
+
+//        var cam = {x:120.24, y:151.63, z:218.39};
+
+
+
+
+
+
+
+
+        /****************************************************
+         * Raytracing / intersection vars because passing args is slow
+         */
+
+        // Current ray
+        // Current closest intersect vars
+
+
+
+/***********************************
+ * Scene primitives
+ *
+ * All primitives have common material properties:
+ *        (cr,cg,cb) = colour
+ *        d = diffuse weight (0..1)
+ *        p = phong weight (0..1)
+ *        pp = phong power coefficient (higher = more acute specular)
+ *        rf = reflectivity (0..1)
+ */
+        /*************************************
+         * Sphere definition
+         */
+        // (x,y,z)=centre, r=radius
+
+
+                // Sphere intersect
+
+                // find incident and normal based on previous sphere intersection
+
+                // Test if ray from incident to light intersects this sphere
+
+
+        /*************************************
+         * Cylinder definition (not infinite)
+         */
+        // (x,y,z)=base, (x1,y1,z1)=end, r=radius
+
+
+
+
+
+        /*************************************
+         * Infinite plane definition
+         */
+        // (x0,y0,z0)-(x1,y1,z1)-(x2,y2,z2) = co-planar point (counter-clockwise)
+
+
+
+
+        /*************************************
+         * Disc defintion
+         */
+        // (x,y,z)=centre, (nx,ny,nz)=normal
+
+
+
+
+        /*******************************
+         * Point light definition
+         */
+        // Point light
+
+
+
+
+/********************
+ * Texture functions
+ */
+
+
+
+
+
+
+
+
+/*******************************************
+ * Texture (image) load functions
+ * NB: Due to browser security limitations, you can
+ * only request images from the originating server
+ */
+
+
+
+
+/************************
+ * Scenegraph
+ */
+
+
+
+
+
+
+
+
+
+
+        // Test ray/object intersection. Returns -1 if none, or index of object.
+        // Will also find incident point in (ix,iy,iz)
+
+
+
+        // see if ray from incident point to the light intersects any object (shadows!)
+
+
+
+
+
+
+
+
+
+
+
+        /*************************************
+         * UI Stuffs
+         */
+
+
+
+
+
+</script>
+
+<style type="text/css">
+body {
+        background-color: #000;
+        color                        : #fff;
+        font                        : 12px verdana;
+        line-height                : 18px;
+}
+table {
+        font                        : 12px verdana;
+        line-height                : 18px;
+}
+canvas {
+        border                        : 1px solid #fff;
+}
+input {
+        line-height                : 16px;
+        border                        : 1px solid #fff;
+        padding                        : 0px;
+        margin                        : 2px;
+}
+</style>
+
+</head>
+
+<body onload="Scenegraph.load();">
+<table border=0><tr>
+<td>
+        Simple Javascript Raytracer example. Do whatever you like with the code. 2008/10/18 mark.webster@gmail.com<br/>
+        Google Chrome 2, Safari 4, Opera 9.6 or Firefox 3 recommended for full features (and speed!)<br/>
+
+        Check out <a href="jsrt-bench.html">benchmarks</a> or realtime <a href="jsrt-anim.html">animation.</a><br/>
+</td><td>
+        <img src="http://www.chromeexperiments.com/img/badge-black_black.png" />
+</td>
+</tr></table>
+<br/>
+Size: <select onchange="Scenegraph.changesize();" id="sizesel">
+                <option value="100x80">100x80</option>
+
+                <option value="200x160">200x160</option>
+                <option value="320x256" SELECTED>320x256</option>
+                <option value="400x320">400x320</option>
+                <option value="500x400">500x400</option>
+                <option value="640x512">640x512</option>
+                <option value="800x640">800x640</option>
+
+                <option value="1200x960">1200x960</option>
+                <option value="1680x1050">1680x1050 (URMENTAL!)</option>
+        </select>
+        Anti-alias: <input type=checkbox onchange="Scenegraph.changeaa();" id="aacheck" />
+<!--        Bilinear Filter: <input type=checkbox id="bicheck" />-->
+
+<table border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td align=center valign=top>
+        <br/> <!-- 400 x 450      800x640    600x480-->
+
+        <div id="canvdiv" style="width:320px; height:256px; border:1px solid #000" >
+                <canvas id="canv" width=320 height=256></canvas>
+        </div><br/>
+        Viewpoint
+        x:<input type=text size=6 id="xangle" />
+        y:<input type=text size=6 id="yangle" />
+        z:<input type=text size=6 id="zangle" />
+        <button onclick="Scenegraph.randomview();">Random</button><br/><br/>
+
+        <button onclick="Scenegraph.load();">Render</button><br/><br/>
+        <div id="progress">Initialising textures...</div>
+        <div id="progress2">&;</div>
+        <div id="msg">&;</div>
+        <div id="dbg">&;</div>
+</td>
+</tr></table>
+</body>
+</html>

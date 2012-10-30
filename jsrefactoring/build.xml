@@ -1,0 +1,55 @@
+<project name="jsrefactoring">
+
+	<path id="runtime-classpath">
+		<pathelement path="bin"/>
+		<pathelement path="../jsutil/bin"/>
+		<pathelement path="../jsparser/bin"/>
+		<pathelement path="../jscontrolflow/bin"/>
+		<pathelement path="../jspointers/bin"/>
+		<fileset dir="../jsutil/lib">
+			<include name="*.jar"/>
+		</fileset>
+		<fileset dir="../jsparser/lib">
+			<include name="*.jar"/>
+		</fileset>
+	</path>
+	
+	<path id="compile-classpath">
+		<pathelement path="../jsutil/bin"/>
+		<pathelement path="../jsparser/bin"/>
+		<pathelement path="../jscontrolflow/bin"/>
+		<pathelement path="../jspointers/bin"/>
+		<fileset dir="../jsutil/lib">
+			<include name="*.jar"/>
+		</fileset>
+		<fileset dir="../jsparser/lib">
+			<include name="*.jar"/>
+		</fileset>
+	</path>
+	
+	<target name="compile">
+		<mkdir dir="bin"/>
+		<javac destdir="bin">
+			<src path="src"/>
+			<classpath refid="compile-classpath"></classpath>
+		</javac>
+	</target>
+	
+	<target name="clear">
+		<delete dir="bin">
+			<include name="**/*.class"/>
+		</delete>
+	</target>
+	
+	<target name="test">
+		<junit fork="true">
+			<batchtest todir="output">
+				<fileset dir="src">
+				    <include name="**/*Tests.java"/>
+				</fileset>
+				<formatter usefile="true" type="xml"/>
+			</batchtest>
+			<classpath refid="runtime-classpath"/>
+		</junit>
+	</target>
+</project>

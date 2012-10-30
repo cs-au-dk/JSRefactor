@@ -1,0 +1,8 @@
+interface IPropertyAccessNode
+
+code
+	@Override
+	public boolean isAssignable() {
+		return true;
+	}
+endcode

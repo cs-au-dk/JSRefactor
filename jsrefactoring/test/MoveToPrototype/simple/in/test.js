@@ -1,0 +1,10 @@
+function Rectangle(w, h) {
+    this.width = w;
+    this.height = h;
+    this.area = /* move to prototype */ function() {
+	return this.width * this.height;
+    };
+}
+
+var r = new Rectangle(23, 42);
+var a = r.area();
