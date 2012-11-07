@@ -1,5 +1,5 @@
 /**
-*  Java HTML Tidy - JTidy
+*  Modified version of: Java HTML Tidy - JTidy
 *  HTML parser and pretty printer
 *
 *  Copyright (c) 1998-2000 World Wide Web Consortium (Massachusetts
