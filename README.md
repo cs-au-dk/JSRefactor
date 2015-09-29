@@ -9,7 +9,7 @@ Main projects:
  - jspointers: pointer analysis for JavaScript
  - jsrefactoring: refactoring logic
 
-Auxilliary projects:
+Auxiliary projects:
  - jsutil: some stuff all projects need
  - jtidy-js: hacked version of jtidy, needed to extract JavaScript from HTML files
  - benchmarks: refactoring benchmarks used in the OOPSLA'11 paper
